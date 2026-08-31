@@ -97,7 +97,7 @@ class AutoFishingEngine:
             stage_seq = cfg.get("stage_reset_sequence", [])
 
             # ---------------------------------------------------------
-            # STATE: CASTING
+            # STATE: CASTING (THROW BAIT)
             # ---------------------------------------------------------
             if self.state == MacroState.CASTING:
                 if time_cast_enabled and timer_roi:
@@ -114,7 +114,9 @@ class AutoFishingEngine:
                                 break
                         time.sleep(0.2)
 
-                self.log("Starting bait casting...")
+                cycle_num = self.completed_fish_count + 1
+                check_interval = cfg.get("inventory_check_interval", 5)
+                self.log(f"🎣 THROWING BAIT - Starting Fishing Cycle #{cycle_num} of {check_interval}...")
                 self.mouse.force_release()
                 self.mouse.click_at(cast_pos[0], cast_pos[1])
                 wait_start_time = time.time()
@@ -129,7 +131,7 @@ class AutoFishingEngine:
                 ui_present = self.tracker.is_ui_present(frame)
 
                 if ui_present:
-                    self.log("🎯 MINIGAME UI DETECTED! STOPPING M1 CLICK SPAM & STARTING MINIGAME...")
+                    self.log("🎯 MINIGAME UI DETECTED! STOPPING M1 CLICK SPAM & PLAYING MINIGAME...")
                     self.mouse.force_release()
                     ui_missing_count = 0
                     self.pid.reset()
@@ -184,7 +186,7 @@ class AutoFishingEngine:
                         self.mouse.force_release()
                         self.completed_fish_count += 1
                         check_interval = cfg.get("inventory_check_interval", 5)
-                        self.log(f"⏹️ Minigame Finished! Progress to next inventory cleanup: {self.completed_fish_count}/{check_interval}")
+                        self.log(f"🏁 MINIGAME FINISHED (Win/Loss)! Completed Fishing Cycle #{self.completed_fish_count}/{check_interval}")
                         self.set_state(MacroState.RECAST_WAIT)
 
                 time.sleep(0.005) # ~120-200 FPS tracking loop
@@ -208,7 +210,7 @@ class AutoFishingEngine:
                 check_interval = cfg.get("inventory_check_interval", 5)
 
                 if self.completed_fish_count >= check_interval:
-                    self.log(f"🛑 MILESTONE REACHED ({self.completed_fish_count}/{check_interval} fish)! HALTING fishing cycle for Hotbar Cleanup & Deletion...")
+                    self.log(f"🛑 MILESTONE REACHED ({self.completed_fish_count}/{check_interval} Completed Fishing Cycles)! HALTING FISHING CYCLE FOR HOTBAR CLEANUP & DELETION...")
                     self.completed_fish_count = 0
                     if hotbar_roi:
                         self.set_state(MacroState.CLEANING_INVENTORY)
@@ -216,7 +218,7 @@ class AutoFishingEngine:
                         self.log("Hotbar ROI not calibrated! Resuming fishing cycle...")
                         self._next_after_cycle(cfg)
                 else:
-                    self.log(f"Resuming fishing cycle ({self.completed_fish_count}/{check_interval} fish completed)...")
+                    self.log(f"Resuming fishing cycle ({self.completed_fish_count}/{check_interval} cycles completed)...")
                     self._next_after_cycle(cfg)
 
             # ---------------------------------------------------------
