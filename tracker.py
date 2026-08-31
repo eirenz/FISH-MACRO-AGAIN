@@ -194,41 +194,58 @@ class VisionTracker:
 
     def is_tome_item(self, slot_crop):
         """
-        Detects if a slot item is a TOME strictly based on the text name 'Tome' using OCR.
-        Returns (is_tome: bool, detected_text: str)
+        Detects if a slot item is a TOME using OCR name matching with visual color fallback.
+        Returns (is_tome: bool, log_info: str)
         """
         if slot_crop is None or slot_crop.size == 0:
-            return False, ""
+            return False, "Empty crop"
 
         import re
+
+        # 1. OCR Text Recognition for "Tome"
         try:
             import pytesseract
 
-            # Convert to Grayscale
             gray = cv2.cvtColor(slot_crop, cv2.COLOR_BGR2GRAY)
-
-            # Upscale 3.0x for clear character extraction
             scaled = cv2.resize(gray, (0, 0), fx=3.0, fy=3.0, interpolation=cv2.INTER_CUBIC)
 
-            # Binarization passes (Standard Otsu & Inverted Otsu for light/dark text)
             _, thresh1 = cv2.threshold(scaled, 0, 255, cv2.THRESH_BINARY | cv2.THRESH_OTSU)
             _, thresh2 = cv2.threshold(scaled, 0, 255, cv2.THRESH_BINARY_INV | cv2.THRESH_OTSU)
 
-            # Perform OCR on scaled raw, thresh1, and thresh2
             txt_raw = pytesseract.image_to_string(scaled, config="--psm 6")
             txt_t1 = pytesseract.image_to_string(thresh1, config="--psm 6")
             txt_t2 = pytesseract.image_to_string(thresh2, config="--psm 6")
 
-            combined_text = f"{txt_raw} {txt_t1} {txt_t2}".strip()
-            clean_text = re.sub(r"\s+", " ", combined_text)
+            combined = f"{txt_raw} {txt_t1} {txt_t2}".lower()
+            clean_txt = re.sub(r"\s+", " ", combined).strip()
 
-            # Check for keyword 'tome' (case-insensitive) or OCR digit substitutions
-            pattern = r"\b(tome|t0me|tom3)\b"
-            is_tome = bool(re.search(pattern, clean_text, re.IGNORECASE) or ("tome" in clean_text.lower()))
+            if re.search(r"\b(tome|t0me|tom3)\b", clean_txt) or ("tome" in clean_txt) or ("tom" in clean_txt):
+                return True, f"OCR Text matched: '{clean_txt[:25]}'"
+        except Exception:
+            pass
 
-            return is_tome, clean_text
-        except Exception as e:
-            return False, f"OCR Error: {e}"
+        # 2. Visual / Color Fallback (Purple Cover or Red Tag)
+        h, w = slot_crop.shape[:2]
+        inner = slot_crop[int(h * 0.1):int(h * 0.9), int(w * 0.1):int(w * 0.9)] if (h > 10 and w > 10) else slot_crop
+        hsv = cv2.cvtColor(inner, cv2.COLOR_BGR2HSV)
+
+        lower_purple = np.array([110, 20, 20])
+        upper_purple = np.array([170, 255, 255])
+        purple_pixels = cv2.countNonZero(cv2.inRange(hsv, lower_purple, upper_purple))
+
+        lower_red1 = np.array([0, 35, 35])
+        upper_red1 = np.array([15, 255, 255])
+        lower_red2 = np.array([160, 35, 35])
+        upper_red2 = np.array([180, 255, 255])
+        red_pixels = cv2.countNonZero(cv2.bitwise_or(
+            cv2.inRange(hsv, lower_red1, upper_red1),
+            cv2.inRange(hsv, lower_red2, upper_red2)
+        ))
+
+        if (purple_pixels > 20) or (red_pixels > 20) or ((purple_pixels + red_pixels) > 30):
+            return True, f"Visual graphics matched (Purple: {purple_pixels}, Red: {red_pixels})"
+
+        return False, "Not a Tome"
 
     def read_timer_display(self, timer_crop):
         """

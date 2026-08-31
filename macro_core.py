@@ -134,9 +134,9 @@ class AutoFishingEngine:
                     self.pid.prev_time = time.time()
                     self.set_state(MacroState.PLAYING)
                 else:
-                    # Periodically spam click M1 at cast spot every 0.35s
+                    # Spam click M1 at cast spot continuously every 0.18s until UI appears
                     now = time.time()
-                    if now - last_spam_click > 0.35:
+                    if now - last_spam_click > 0.18:
                         self.mouse.click_at(cast_pos[0], cast_pos[1])
                         last_spam_click = now
 
@@ -145,7 +145,7 @@ class AutoFishingEngine:
                         self.log("No minigame UI after timeout. Restarting cast cycle...")
                         self.set_state(MacroState.CASTING)
                     else:
-                        time.sleep(0.03)
+                        time.sleep(0.02)
 
             # ---------------------------------------------------------
             # STATE: PLAYING MINIGAME
