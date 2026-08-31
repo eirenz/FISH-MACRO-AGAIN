@@ -194,42 +194,41 @@ class VisionTracker:
 
     def is_tome_item(self, slot_crop):
         """
-        Detects if a slot item is a TOME (purple/magenta book cover or red tag).
-        Returns (is_tome: bool, purple_pixels: int, red_pixels: int)
+        Detects if a slot item is a TOME strictly based on the text name 'Tome' using OCR.
+        Returns (is_tome: bool, detected_text: str)
         """
         if slot_crop is None or slot_crop.size == 0:
-            return False, 0, 0
+            return False, ""
 
-        # Crop inner 80% to avoid slot border frame noise
-        h, w = slot_crop.shape[:2]
-        if h > 10 and w > 10:
-            inner_crop = slot_crop[int(h * 0.1):int(h * 0.9), int(w * 0.1):int(w * 0.9)]
-        else:
-            inner_crop = slot_crop
+        import re
+        try:
+            import pytesseract
 
-        hsv = cv2.cvtColor(inner_crop, cv2.COLOR_BGR2HSV)
+            # Convert to Grayscale
+            gray = cv2.cvtColor(slot_crop, cv2.COLOR_BGR2GRAY)
 
-        # 1. Purple / Violet / Magenta Book Cover (HSV)
-        lower_purple = np.array([110, 20, 20])
-        upper_purple = np.array([170, 255, 255])
-        purple_mask = cv2.inRange(hsv, lower_purple, upper_purple)
-        purple_pixels = cv2.countNonZero(purple_mask)
+            # Upscale 3.0x for clear character extraction
+            scaled = cv2.resize(gray, (0, 0), fx=3.0, fy=3.0, interpolation=cv2.INTER_CUBIC)
 
-        # 2. Red Book Cover / Tag (HSV red wraps 0..15 and 160..180)
-        lower_red1 = np.array([0, 35, 35])
-        upper_red1 = np.array([15, 255, 255])
-        lower_red2 = np.array([160, 35, 35])
-        upper_red2 = np.array([180, 255, 255])
-        
-        red_mask = cv2.bitwise_or(
-            cv2.inRange(hsv, lower_red1, upper_red1),
-            cv2.inRange(hsv, lower_red2, upper_red2)
-        )
-        red_pixels = cv2.countNonZero(red_mask)
+            # Binarization passes (Standard Otsu & Inverted Otsu for light/dark text)
+            _, thresh1 = cv2.threshold(scaled, 0, 255, cv2.THRESH_BINARY | cv2.THRESH_OTSU)
+            _, thresh2 = cv2.threshold(scaled, 0, 255, cv2.THRESH_BINARY_INV | cv2.THRESH_OTSU)
 
-        # A Tome item has purple or red book graphics
-        is_tome = (purple_pixels > 20) or (red_pixels > 20) or ((purple_pixels + red_pixels) > 30)
-        return is_tome, purple_pixels, red_pixels
+            # Perform OCR on scaled raw, thresh1, and thresh2
+            txt_raw = pytesseract.image_to_string(scaled, config="--psm 6")
+            txt_t1 = pytesseract.image_to_string(thresh1, config="--psm 6")
+            txt_t2 = pytesseract.image_to_string(thresh2, config="--psm 6")
+
+            combined_text = f"{txt_raw} {txt_t1} {txt_t2}".strip()
+            clean_text = re.sub(r"\s+", " ", combined_text)
+
+            # Check for keyword 'tome' (case-insensitive) or OCR digit substitutions
+            pattern = r"\b(tome|t0me|tom3)\b"
+            is_tome = bool(re.search(pattern, clean_text, re.IGNORECASE) or ("tome" in clean_text.lower()))
+
+            return is_tome, clean_text
+        except Exception as e:
+            return False, f"OCR Error: {e}"
 
     def read_timer_display(self, timer_crop):
         """
