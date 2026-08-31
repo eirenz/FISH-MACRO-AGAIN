@@ -36,7 +36,7 @@ class VisionTracker:
     def is_ui_present(self, img_bgr):
         """
         Detects if the fishing minigame bar UI is currently visible.
-        Checks for characteristic blue slider bar & dark container frame pixels.
+        Uses contour geometry & area validation to ignore background water/sky blue pixels.
         """
         if img_bgr is None or img_bgr.size == 0:
             return False
@@ -47,10 +47,18 @@ class VisionTracker:
         lower_blue = np.array([90, 100, 100])
         upper_blue = np.array([130, 255, 255])
         blue_mask = cv2.inRange(hsv, lower_blue, upper_blue)
-        blue_pixels = cv2.countNonZero(blue_mask)
 
-        # UI is present if a sufficient cluster of blue bar pixels exists
-        return blue_pixels > 80
+        contours_blue, _ = cv2.findContours(blue_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+        if contours_blue:
+            for c in contours_blue:
+                area = cv2.contourArea(c)
+                if area > 120:  # Valid minigame capture bar contour
+                    bx, by, bw, bh = cv2.boundingRect(c)
+                    if bh > 10 or bw > 10:
+                        return True
+
+        return False
 
     def track(self, img_bgr):
         """

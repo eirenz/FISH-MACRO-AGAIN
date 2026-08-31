@@ -115,14 +115,12 @@ class AutoFishingEngine:
                         time.sleep(0.2)
 
                 self.log("Starting bait casting...")
+                self.mouse.force_release()
                 self.mouse.click_at(cast_pos[0], cast_pos[1])
                 wait_start_time = time.time()
                 last_spam_click = time.time()
                 self.set_state(MacroState.WAITING_FOR_UI)
 
-            # ---------------------------------------------------------
-            # STATE: WAITING FOR MINIGAME UI (Continuous M1 Click Spam)
-            # ---------------------------------------------------------
             # ---------------------------------------------------------
             # STATE: WAITING FOR MINIGAME UI (Fast Continuous M1 Click Spam)
             # ---------------------------------------------------------
@@ -181,12 +179,12 @@ class AutoFishingEngine:
                         self.mouse.release()
                 else:
                     ui_missing_count += 1
-                    # If UI missing for 4 consecutive frames (~50-80ms), minigame ended
-                    if ui_missing_count > 4:
+                    # If UI missing for 3 consecutive frames (~25-40ms), minigame ended
+                    if ui_missing_count > 3:
                         self.mouse.force_release()
                         self.completed_fish_count += 1
                         check_interval = cfg.get("inventory_check_interval", 5)
-                        self.log(f"🐟 Fish Caught! Progress to next inventory cleanup: {self.completed_fish_count}/{check_interval}")
+                        self.log(f"⏹️ Minigame Finished! Progress to next inventory cleanup: {self.completed_fish_count}/{check_interval}")
                         self.set_state(MacroState.RECAST_WAIT)
 
                 time.sleep(0.005) # ~120-200 FPS tracking loop
