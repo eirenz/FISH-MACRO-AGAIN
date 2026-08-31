@@ -221,7 +221,7 @@ class AutoFishingEngine:
                     self._next_after_cycle(cfg)
 
             # ---------------------------------------------------------
-            # STATE: CLEANING INVENTORY (Press 1..6 Keys & Drag Tomes to Trash)
+            # STATE: CLEANING INVENTORY (Step 1: Keys 1..6 -> Step 2: Drag to Trash)
             # ---------------------------------------------------------
             elif self.state == MacroState.CLEANING_INVENTORY:
                 # HARD SAFETY GUARD: Double check that user is NOT currently in a minigame
@@ -232,9 +232,8 @@ class AutoFishingEngine:
                         self.set_state(MacroState.PLAYING)
                         continue
 
-                self.log("📦 Starting Hotbar Processing: Pressing keys 1, 2, 3, 4, 5, 6...")
-                
-                # 1. Press hotbar keys 1, 2, 3, 4, 5, 6 sequentially
+                # STEP 1: KEY PRESSES 1..6 FIRST
+                self.log("📦 STEP 1: Pressing hotbar keys 1, 2, 3, 4, 5, 6 FIRST...")
                 for slot_num in range(1, 7):
                     if not self.running:
                         break
@@ -242,15 +241,17 @@ class AutoFishingEngine:
                     self.mouse.press_number_key(str(slot_num))
                     time.sleep(0.12)
 
-                time.sleep(0.2)
+                time.sleep(0.25)
 
-                # 2. Check remaining items for TOME and INSTANTLY DRAG Tomes to Trash Can button
+                # STEP 2: DELETION PROCESS (DRAG HOTBAR ITEMS TO TRASH BUTTON) SECOND
                 if hotbar_roi and trash_pos:
-                    # Final safety check before dragging
+                    self.log("🗑️ STEP 2: Executing Drag Deletion Process (Dragging hotbar items to Trash button)...")
+                    
+                    # Safety check before dragging
                     if roi:
                         check_frame = self.tracker.grab_roi(roi)
                         if self.tracker.is_ui_present(check_frame):
-                            self.log("⛔ SAFETY GUARD: Minigame started mid-cleanup! Aborting Tome drag.")
+                            self.log("⛔ SAFETY GUARD: Minigame started mid-cleanup! Aborting item drag.")
                             self.set_state(MacroState.PLAYING)
                             continue
 
@@ -261,23 +262,19 @@ class AutoFishingEngine:
                     slot_w = (hx2 - hx1) / 6.0
                     slot_y_center = (hy1 + hy2) / 2.0
 
-                    for i in range(len(slot_crops)):
+                    target_slots = occupied_slots if occupied_slots else range(6)
+                    for i in target_slots:
                         if not self.running:
                             break
 
-                        slot_crop = slot_crops[i]
-                        is_tome, detected_info = self.tracker.is_tome_item(slot_crop)
-                        if is_tome:
-                            slot_x_center = hx1 + (i + 0.5) * slot_w
-                            self.log(f"📜 TOME DETECTED in Slot {i+1} ({detected_info})! INSTANTLY DRAGGING TO TRASH BUTTON...")
-                            self.mouse.drag_and_drop((slot_x_center, slot_y_center), trash_pos, duration=0.25)
-                            time.sleep(0.2)
-                        else:
-                            self.log(f"Slot {i+1}: Non-Tome item ({detected_info}). Kept in hotbar.")
+                        slot_x_center = hx1 + (i + 0.5) * slot_w
+                        self.log(f"🗑️ Dragging Slot {i+1} item to Trash Can button...")
+                        self.mouse.drag_and_drop((slot_x_center, slot_y_center), trash_pos, duration=0.35)
+                        time.sleep(0.20)
                 elif not trash_pos:
-                    self.log("⚠️ Trash Can button not calibrated! Skipping Tome deletion.")
+                    self.log("⚠️ Trash Can button not calibrated! Skipping drag deletion.")
 
-                self.log("⚡ Inventory cleanup finished! Resuming fishing cycle...")
+                self.log("⚡ Step 1 (Keys 1-6) & Step 2 (Drag Deletion) finished! Resuming fishing cycle...")
                 self._next_after_cycle(cfg)
 
             # ---------------------------------------------------------

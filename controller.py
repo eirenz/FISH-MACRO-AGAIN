@@ -66,12 +66,23 @@ class MouseController:
         self.is_down = False
 
     def drag_and_drop(self, from_pos, to_pos, duration=0.35):
-        """Smoothly drag from from_pos to to_pos by holding LMB."""
+        """Smoothly drag from from_pos to to_pos by holding LMB with DirectX/Roblox mouse move events."""
         fx, fy = int(from_pos[0]), int(from_pos[1])
         tx, ty = int(to_pos[0]), int(to_pos[1])
 
+        screen_w = ctypes.windll.user32.GetSystemMetrics(0)
+        screen_h = ctypes.windll.user32.GetSystemMetrics(1)
+
+        def move_cursor_event(x, y):
+            # Update OS cursor position
+            ctypes.windll.user32.SetCursorPos(int(x), int(y))
+            # Send DirectX / RawInput absolute move event (0x0001 = MOVE, 0x8000 = ABSOLUTE)
+            abs_x = int(x * 65535 / screen_w)
+            abs_y = int(y * 65535 / screen_h)
+            ctypes.windll.user32.mouse_event(0x0001 | 0x8000, abs_x, abs_y, 0, 0)
+
         # Move to item slot center
-        ctypes.windll.user32.SetCursorPos(fx, fy)
+        move_cursor_event(fx, fy)
         time.sleep(0.08)
         
         # Press left mouse down
@@ -81,13 +92,13 @@ class MouseController:
         # CRITICAL: Hold in place for 0.12s so UI registers item drag pickup
         time.sleep(0.12)
 
-        # Smooth movement interpolation to target position
+        # Smooth movement interpolation to target position with real move events
         steps = 25
         step_delay = max(duration / steps, 0.008)
         for i in range(1, steps + 1):
             cx = int(fx + (tx - fx) * (i / steps))
             cy = int(fy + (ty - fy) * (i / steps))
-            ctypes.windll.user32.SetCursorPos(cx, cy)
+            move_cursor_event(cx, cy)
             time.sleep(step_delay)
 
         # Hold over trash target for 0.1s before releasing
