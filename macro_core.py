@@ -122,21 +122,24 @@ class AutoFishingEngine:
             # ---------------------------------------------------------
             # STATE: WAITING FOR MINIGAME UI (Continuous M1 Click Spam)
             # ---------------------------------------------------------
+            # ---------------------------------------------------------
+            # STATE: WAITING FOR MINIGAME UI (Fast Continuous M1 Click Spam)
+            # ---------------------------------------------------------
             elif self.state == MacroState.WAITING_FOR_UI:
                 frame = self.tracker.grab_roi(roi)
                 ui_present = self.tracker.is_ui_present(frame)
 
                 if ui_present:
-                    self.log("Minigame UI Detected! Starting minigame...")
+                    self.log("🎯 MINIGAME UI DETECTED! STOPPING M1 CLICK SPAM & STARTING MINIGAME...")
                     self.mouse.force_release()
                     ui_missing_count = 0
                     self.pid.prev_error = 0.0
                     self.pid.prev_time = time.time()
                     self.set_state(MacroState.PLAYING)
                 else:
-                    # Spam click M1 at cast spot continuously every 0.18s until UI appears
+                    # Fast continuous M1 spam click every 0.15s until UI appears
                     now = time.time()
-                    if now - last_spam_click > 0.18:
+                    if now - last_spam_click > 0.15:
                         self.mouse.click_at(cast_pos[0], cast_pos[1])
                         last_spam_click = now
 
@@ -145,7 +148,7 @@ class AutoFishingEngine:
                         self.log("No minigame UI after timeout. Restarting cast cycle...")
                         self.set_state(MacroState.CASTING)
                     else:
-                        time.sleep(0.02)
+                        time.sleep(0.015)
 
             # ---------------------------------------------------------
             # STATE: PLAYING MINIGAME
@@ -178,28 +181,27 @@ class AutoFishingEngine:
                         self.mouse.release()
                 else:
                     ui_missing_count += 1
-                    # If UI missing for 6 consecutive frames (~80-150ms), minigame ended
-                    if ui_missing_count > 6:
+                    # If UI missing for 4 consecutive frames (~50-80ms), minigame ended
+                    if ui_missing_count > 4:
                         self.mouse.force_release()
-                        self.log("Minigame complete / caught fish!")
+                        self.log("⏹️ Minigame Complete / Caught Fish! Halting fishing cycle for inventory check...")
                         self.set_state(MacroState.RECAST_WAIT)
 
                 time.sleep(0.005) # ~120-200 FPS tracking loop
 
             # ---------------------------------------------------------
-            # STATE: RECAST WAIT & INVENTORY CHECK
+            # STATE: RECAST WAIT & INVENTORY CHECK (HALTS FISHING CYCLE)
             # ---------------------------------------------------------
             elif self.state == MacroState.RECAST_WAIT:
                 self.mouse.force_release()
-                recast_delay = cfg.get("recast_delay", 1.5)
-                self.log(f"Waiting {recast_delay}s before checking hotbar...")
+                recast_delay = min(cfg.get("recast_delay", 0.4), 0.5)
                 time.sleep(recast_delay)
 
                 if hotbar_roi:
-                    self.log("📦 Starting Hotbar & Inventory Processing...")
+                    self.log("📦 Halting fishing cycle: Starting Hotbar Key Pressing & Tome Deletion...")
                     self.set_state(MacroState.CLEANING_INVENTORY)
                 else:
-                    self.log("Hotbar ROI not calibrated! Skipping inventory check.")
+                    self.log("Hotbar ROI not calibrated! Resuming fishing cycle...")
                     self._next_after_cycle(cfg)
 
             # ---------------------------------------------------------
@@ -214,11 +216,11 @@ class AutoFishingEngine:
                         break
                     self.log(f"Pressing hotbar key '{slot_num}'...")
                     self.mouse.press_number_key(str(slot_num))
-                    time.sleep(0.18)
+                    time.sleep(0.12)
 
-                time.sleep(0.3)
+                time.sleep(0.2)
 
-                # 2. Check remaining items for TOME and DRAG only Tomes to Trash Can button
+                # 2. Check remaining items for TOME and INSTANTLY DRAG Tomes to Trash Can button
                 if hotbar_roi and trash_pos:
                     hotbar_img = self.tracker.grab_roi(hotbar_roi)
                     occupied_slots, is_full, slot_crops = self.tracker.check_hotbar(hotbar_img)
@@ -232,17 +234,18 @@ class AutoFishingEngine:
                             break
 
                         slot_crop = slot_crops[i]
-                        is_tome, detected_text = self.tracker.is_tome_item(slot_crop)
+                        is_tome, detected_info = self.tracker.is_tome_item(slot_crop)
                         if is_tome:
                             slot_x_center = hx1 + (i + 0.5) * slot_w
-                            self.log(f"📜 TOME detected in Slot {i+1} (OCR Text: '{detected_text}')! Dragging item to Trash Can button...")
-                            self.mouse.drag_and_drop((slot_x_center, slot_y_center), trash_pos)
-                            time.sleep(0.3)
+                            self.log(f"📜 TOME DETECTED in Slot {i+1} ({detected_info})! INSTANTLY DRAGGING TO TRASH BUTTON...")
+                            self.mouse.drag_and_drop((slot_x_center, slot_y_center), trash_pos, duration=0.25)
+                            time.sleep(0.2)
                         else:
-                            self.log(f"Slot {i+1}: Non-Tome item (OCR Text: '{detected_text}'). Kept in hotbar.")
+                            self.log(f"Slot {i+1}: Non-Tome item ({detected_info}). Kept in hotbar.")
                 elif not trash_pos:
                     self.log("⚠️ Trash Can button not calibrated! Skipping Tome deletion.")
 
+                self.log("⚡ Inventory cleanup finished! Resuming fishing cycle...")
                 self._next_after_cycle(cfg)
 
             # ---------------------------------------------------------
