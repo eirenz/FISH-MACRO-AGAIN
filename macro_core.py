@@ -196,17 +196,10 @@ class AutoFishingEngine:
                 time.sleep(recast_delay)
 
                 if hotbar_roi:
-                    hotbar_img = self.tracker.grab_roi(hotbar_roi)
-                    occupied_slots, is_full, _ = self.tracker.check_hotbar(hotbar_img)
-                    if is_full:
-                        self.log("🔥 HOTBAR IS FULL! Starting hotbar item processing...")
-                        self.set_state(MacroState.CLEANING_INVENTORY)
-                    elif occupied_slots:
-                        self.log(f"Hotbar has items in slots: {[s+1 for s in occupied_slots]}. Processing...")
-                        self.set_state(MacroState.CLEANING_INVENTORY)
-                    else:
-                        self._next_after_cycle(cfg)
+                    self.log("📦 Starting Hotbar & Inventory Processing...")
+                    self.set_state(MacroState.CLEANING_INVENTORY)
                 else:
+                    self.log("Hotbar ROI not calibrated! Skipping inventory check.")
                     self._next_after_cycle(cfg)
 
             # ---------------------------------------------------------

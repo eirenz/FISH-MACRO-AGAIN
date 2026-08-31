@@ -47,9 +47,9 @@ class MouseController:
             self.is_down = True
 
     def release(self):
-        # Always issue UP event to avoid state desync
-        _send_input(MOUSEEVENTF_LEFTUP)
-        self.is_down = False
+        if self.is_down:
+            _send_input(MOUSEEVENTF_LEFTUP)
+            self.is_down = False
 
     def click_at(self, x, y):
         """Move cursor to (x, y) and perform a quick click."""
