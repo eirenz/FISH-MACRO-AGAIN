@@ -94,6 +94,18 @@ class MouseController:
         self.is_down = False
         time.sleep(0.05)
 
+    def press_number_key(self, num_str):
+        """Presses keyboard number key '1', '2', '3', '4', '5', or '6'."""
+        try:
+            val = int(num_str)
+            if 1 <= val <= 6:
+                vk = 0x30 + val  # 0x31 for '1', 0x36 for '6'
+                ctypes.windll.user32.keybd_event(vk, 0, 0, 0)
+                time.sleep(0.05)
+                ctypes.windll.user32.keybd_event(vk, 0, 2, 0)  # KEYEVENTF_KEYUP = 0x0002
+        except Exception:
+            pass
+
 
 class PIDController:
     """

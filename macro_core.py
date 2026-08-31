@@ -210,46 +210,44 @@ class AutoFishingEngine:
                     self._next_after_cycle(cfg)
 
             # ---------------------------------------------------------
-            # STATE: CLEANING INVENTORY (Double Click Items & Delete Tomes)
+            # STATE: CLEANING INVENTORY (Press 1..6 Keys & Drag Tomes to Trash)
             # ---------------------------------------------------------
             elif self.state == MacroState.CLEANING_INVENTORY:
-                if not hotbar_roi:
-                    self.log("Hotbar ROI not calibrated! Skipping inventory check.")
-                    self._next_after_cycle(cfg)
-                    continue
-
-                hotbar_img = self.tracker.grab_roi(hotbar_roi)
-                occupied_slots, is_full, slot_crops = self.tracker.check_hotbar(hotbar_img)
+                self.log("📦 Hotbar Processing: Pressing keys 1, 2, 3, 4, 5, 6...")
                 
-                hx1, hy1, hx2, hy2 = hotbar_roi
-                slot_w = (hx2 - hx1) / 6.0
-                slot_y_center = (hy1 + hy2) / 2.0
-
-                for i in occupied_slots:
+                # 1. Press hotbar keys 1, 2, 3, 4, 5, 6 sequentially
+                for slot_num in range(1, 7):
                     if not self.running:
                         break
+                    self.log(f"Pressing hotbar key '{slot_num}'...")
+                    self.mouse.press_number_key(str(slot_num))
+                    time.sleep(0.18)
 
-                    slot_x_center = hx1 + (i + 0.5) * slot_w
-                    slot_crop = slot_crops[i]
+                time.sleep(0.3)
 
-                    self.log(f"Processing Hotbar Slot {i+1}...")
+                # 2. Check remaining items for TOME and DRAG only Tomes to Trash Can button
+                if hotbar_roi and trash_pos:
+                    hotbar_img = self.tracker.grab_roi(hotbar_roi)
+                    occupied_slots, is_full, slot_crops = self.tracker.check_hotbar(hotbar_img)
+                    
+                    hx1, hy1, hx2, hy2 = hotbar_roi
+                    slot_w = (hx2 - hx1) / 6.0
+                    slot_y_center = (hy1 + hy2) / 2.0
 
-                    # RULE 1: Double click every item in the hotbar twice
-                    self.mouse.click_at(slot_x_center, slot_y_center)
-                    time.sleep(0.12)
-                    self.mouse.click_at(slot_x_center, slot_y_center)
-                    time.sleep(0.2)
+                    for i in range(len(slot_crops)):
+                        if not self.running:
+                            break
 
-                    # RULE 2: Check if item is a TOME
-                    if self.tracker.is_tome_item(slot_crop):
-                        if trash_pos:
-                            self.log(f"📜 TOME detected in Slot {i+1}! Dragging to Trash Can button...")
+                        slot_crop = slot_crops[i]
+                        if self.tracker.is_tome_item(slot_crop):
+                            slot_x_center = hx1 + (i + 0.5) * slot_w
+                            self.log(f"📜 TOME detected in Slot {i+1}! Dragging item to Trash Can button...")
                             self.mouse.drag_and_drop((slot_x_center, slot_y_center), trash_pos)
                             time.sleep(0.3)
                         else:
-                            self.log(f"📜 TOME detected in Slot {i+1}, but Trash Can button is not calibrated!")
-                    else:
-                        self.log(f"Slot {i+1} item processed (Non-Tome).")
+                            self.log(f"Slot {i+1}: Non-Tome item (Kept in hotbar).")
+                elif not trash_pos:
+                    self.log("⚠️ Trash Can button not calibrated! Skipping Tome deletion.")
 
                 self._next_after_cycle(cfg)
 
