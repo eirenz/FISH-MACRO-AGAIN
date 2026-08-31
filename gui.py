@@ -172,99 +172,73 @@ class ROISelectorOverlay:
         self.root.destroy()
 
 
-class StageSequenceDialog:
-    """Dialog window to manage stage reset sequence clicks & delays."""
-    def __init__(self, parent, config_manager, on_update_callback):
-        self.cfg_mgr = config_manager
-        self.on_update = on_update_callback
-        
-        self.dialog = tk.Toplevel(parent)
-        self.dialog.title("🔄 Stage Reset Sequence Manager")
-        self.dialog.geometry("480x420")
-        self.dialog.config(bg="#1e1e28")
-        self.dialog.transient(parent)
-        
-        try:
-            self.dialog.grab_set()
-        except Exception:
-            pass
-
-        self.steps = list(self.cfg_mgr.get().get("stage_reset_sequence", []))
-
-        tk.Label(self.dialog, text="Stage Reset Click Sequence", font=("Segoe UI", 12, "bold"), bg="#1e1e28", fg="#00d2ff").pack(anchor="w", padx=15, pady=(15, 5))
-        tk.Label(self.dialog, text="These click steps execute automatically after minigame / inventory clean to repeat the stage.", font=("Segoe UI", 8), bg="#1e1e28", fg="#aaaaaa", wraplength=440, justify="left").pack(anchor="w", padx=15, pady=(0, 10))
-
-        # Listbox frame
-        list_frame = tk.Frame(self.dialog, bg="#1e1e28")
-        list_frame.pack(fill=tk.BOTH, expand=True, padx=15, pady=5)
-
-        self.listbox = tk.Listbox(list_frame, bg="#111118", fg="#00ff88", font=("Consolas", 10), selectbackground="#2a2a3c", highlightthickness=0, bd=1, relief="solid")
-        self.listbox.pack(fill=tk.BOTH, expand=True, side=tk.LEFT)
-
-        # Control panel for delay & buttons
-        delay_frame = tk.Frame(self.dialog, bg="#1e1e28")
-        delay_frame.pack(fill=tk.X, padx=15, pady=(5, 0))
-        
-        tk.Label(delay_frame, text="Delay After Next Click (seconds):", font=("Segoe UI", 8, "bold"), bg="#1e1e28", fg="#ffffff").pack(side=tk.LEFT)
-        self.entry_delay = tk.Entry(delay_frame, font=("Segoe UI", 9, "bold"), width=6, bg="#111118", fg="#00ff88", insertbackground="white", bd=1, relief="solid")
-        self.entry_delay.insert(0, "1.0")
-        self.entry_delay.pack(side=tk.LEFT, padx=8)
-
-        # Buttons frame
-        btn_frame = tk.Frame(self.dialog, bg="#1e1e28")
-        btn_frame.pack(fill=tk.X, padx=15, pady=15)
-
-        tk.Button(btn_frame, text="➕ Add Click Step", font=("Segoe UI", 9, "bold"), bg="#009944", fg="#ffffff", activebackground="#00cc55", relief="flat", padx=10, pady=6, command=self.on_add_step).pack(side=tk.LEFT, padx=(0, 10))
-        tk.Button(btn_frame, text="🗑️ Clear All", font=("Segoe UI", 9, "bold"), bg="#cc2222", fg="#ffffff", activebackground="#ff3333", relief="flat", padx=10, pady=6, command=self.on_clear_steps).pack(side=tk.LEFT)
-        tk.Button(btn_frame, text="Done", font=("Segoe UI", 9, "bold"), bg="#333344", fg="#ffffff", activebackground="#444455", relief="flat", padx=15, pady=6, command=self.on_done).pack(side=tk.RIGHT)
-
-        self._refresh_listbox()
-
-    def _refresh_listbox(self):
-        self.listbox.delete(0, tk.END)
-        for idx, step in enumerate(self.steps):
-            self.listbox.insert(tk.END, f"Step {idx+1}: Click ({step['x']}, {step['y']})  [Wait {step['delay']}s]")
-
-    def on_add_step(self):
-        try:
-            self.dialog.grab_release()
-        except Exception:
-            pass
-        self.dialog.iconify()
-        prompt = f"🎯 Step {len(self.steps)+1}: LEFT-CLICK anywhere to set click location (Press ESC to cancel)"
-        SpotSelectorOverlay(self._on_step_pos_selected, prompt=prompt)
-
-    def _on_step_pos_selected(self, x, y):
-        self.dialog.deiconify()
-        self.dialog.lift()
-        self.dialog.focus_force()
-        try:
-            self.dialog.grab_set()
-        except Exception:
-            pass
-
-        try:
-            delay_val = float(self.entry_delay.get().strip())
-        except ValueError:
-            delay_val = 1.0
-
-        self.steps.append({"x": x, "y": y, "delay": delay_val})
-        self.cfg_mgr.set("stage_reset_sequence", self.steps)
-        self._refresh_listbox()
-        self.on_update()
-
-    def on_clear_steps(self):
+class MultiStepSequenceOverlay:
+    """Full-screen interactive overlay to select multiple stage reset click points in order."""
+    def __init__(self, callback, prompt="🔄 LEFT-CLICK points in order | RIGHT-CLICK or ENTER when Done | ESC to Cancel"):
+        self.callback = callback
         self.steps = []
-        self.cfg_mgr.set("stage_reset_sequence", self.steps)
-        self._refresh_listbox()
-        self.on_update()
 
-    def on_done(self):
+        self.root = tk.Toplevel()
+        self.root.attributes("-fullscreen", True)
+        self.root.attributes("-alpha", 0.35)
+        self.root.attributes("-topmost", True)
+        self.root.config(bg="gray", cursor="cross")
+
+        self.canvas = tk.Canvas(self.root, bg="black", highlightthickness=0)
+        self.canvas.pack(fill=tk.BOTH, expand=True)
+
+        # Banner
+        self.banner = self.canvas.create_text(
+            self.root.winfo_screenwidth() // 2,
+            50,
+            text=prompt,
+            fill="yellow",
+            font=("Segoe UI", 15, "bold")
+        )
+
+        self.root.lift()
+        self.root.focus_force()
         try:
-            self.dialog.grab_release()
+            self.root.grab_set()
         except Exception:
             pass
-        self.dialog.destroy()
+
+        self.root.bind("<Button-1>", self.on_left_click)
+        self.root.bind("<Button-3>", self.on_done)
+        self.root.bind("<Return>", self.on_done)
+        self.root.bind("<Escape>", self.on_cancel)
+
+    def on_left_click(self, event):
+        x, y = event.x_root, event.y_root
+        self.steps.append((x, y))
+        idx = len(self.steps)
+
+        # Draw visual marker on canvas
+        cx, cy = event.x, event.y
+        self.canvas.create_oval(cx - 16, cy - 16, cx + 16, cy + 16, outline="#00ff88", width=3, fill="#00aa44")
+        self.canvas.create_text(cx, cy, text=str(idx), fill="white", font=("Segoe UI", 11, "bold"))
+
+        # Update instruction banner
+        self.canvas.itemconfig(
+            self.banner,
+            text=f"🔄 Added Step {idx}: ({x}, {y}) | LEFT-CLICK for next step | RIGHT-CLICK or ENTER when Done"
+        )
+
+    def on_done(self, event=None):
+        try:
+            self.root.grab_release()
+        except Exception:
+            pass
+        self.root.destroy()
+        self.callback(self.steps)
+
+    def on_cancel(self, event=None):
+        try:
+            self.root.grab_release()
+        except Exception:
+            pass
+        self.root.destroy()
+        self.callback(None)
 
 
 class DashboardApp:
@@ -541,11 +515,23 @@ class DashboardApp:
         self.add_log(f"Timer ROI saved: ({x1},{y1}) to ({x2},{y2}) [{w}x{h}px]")
 
     def on_manage_stage_sequence(self):
-        StageSequenceDialog(self.root, self.cfg_mgr, self._update_seq_label)
+        self.root.iconify()
+        MultiStepSequenceOverlay(self._on_stage_sequence_selected)
 
-    def _update_seq_label(self):
-        seq = self.cfg_mgr.get().get("stage_reset_sequence", [])
-        self.lbl_seq_pos.config(text=f"Stage Sequence: {len(seq)} click step(s)", fg="#00ff88" if seq else "#8888aa")
+    def _on_stage_sequence_selected(self, points):
+        self.root.deiconify()
+        if points is not None:
+            if points:
+                seq = [{"x": x, "y": y, "delay": 1.0} for x, y in points]
+                self.cfg_mgr.set("stage_reset_sequence", seq)
+                self.lbl_seq_pos.config(text=f"Stage Sequence: {len(seq)} click step(s)", fg="#00ff88")
+                self.add_log(f"Stage Reset Sequence saved with {len(seq)} click step(s).")
+            else:
+                self.cfg_mgr.set("stage_reset_sequence", [])
+                self.lbl_seq_pos.config(text="Stage Sequence: 0 steps", fg="#8888aa")
+                self.add_log("Stage Reset Sequence cleared.")
+        else:
+            self.add_log("Stage Reset Sequence selection cancelled.")
 
     def _on_time_cast_toggle(self):
         val = self.time_cast_var.get()
