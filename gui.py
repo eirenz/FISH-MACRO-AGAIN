@@ -339,12 +339,22 @@ class DashboardApp:
         self.lbl_seq_pos = tk.Label(card1, text="Stage Sequence: 0 steps", font=("Segoe UI", 8), bg="#222230", fg="#8888aa", anchor="w")
         self.lbl_seq_pos.pack(fill=tk.X)
 
-        # Card 2: Time-Based Pitch Mode Options
-        card_time = tk.LabelFrame(left_col, text=" ⏱️ Time-Based Pitch Mode ", font=("Segoe UI", 11, "bold"), bg="#222230", fg="#00d2ff", padx=12, pady=8, bd=1, relief="solid")
+        # Card 2: Options & Inventory Cleanup Interval
+        card_time = tk.LabelFrame(left_col, text=" ⚙️ Macro Options & Inventory Halt ", font=("Segoe UI", 11, "bold"), bg="#222230", fg="#00d2ff", padx=12, pady=8, bd=1, relief="solid")
         card_time.pack(fill=tk.X, pady=(0, 10))
 
+        # Inventory check interval entry
+        inv_frame = tk.Frame(card_time, bg="#222230")
+        inv_frame.pack(fill=tk.X, pady=(0, 6))
+        tk.Label(inv_frame, text="Halt & Clean Inventory Every N Fish:", font=("Segoe UI", 8, "bold"), bg="#222230", fg="#ffffff").pack(side=tk.LEFT)
+        self.entry_inv_interval = tk.Entry(inv_frame, font=("Consolas", 10, "bold"), width=5, bg="#111118", fg="#00ff88", insertbackground="white", bd=1, relief="solid")
+        self.entry_inv_interval.pack(side=tk.LEFT, padx=8)
+        self.entry_inv_interval.bind("<FocusOut>", lambda e: self._on_inv_interval_change())
+        self.entry_inv_interval.bind("<Return>", lambda e: self._on_inv_interval_change())
+
+        # Time-Based Pitch Mode
         self.time_cast_var = tk.BooleanVar()
-        chk_time = tk.Checkbutton(card_time, text="Enable Time-Based Casting", variable=self.time_cast_var, font=("Segoe UI", 9, "bold"), bg="#222230", fg="#ffffff", selectcolor="#181820", activebackground="#222230", activeforeground="#ffffff", command=self._on_time_cast_toggle)
+        chk_time = tk.Checkbutton(card_time, text="Enable Time-Based Pitch Mode", variable=self.time_cast_var, font=("Segoe UI", 9, "bold"), bg="#222230", fg="#ffffff", selectcolor="#181820", activebackground="#222230", activeforeground="#ffffff", command=self._on_time_cast_toggle)
         chk_time.pack(anchor="w", pady=(0, 4))
 
         time_frame = tk.Frame(card_time, bg="#222230")
@@ -439,6 +449,9 @@ class DashboardApp:
         seq = cfg.get("stage_reset_sequence", [])
         self.lbl_seq_pos.config(text=f"Stage Sequence: {len(seq)} click step(s)", fg="#00ff88" if seq else "#8888aa")
 
+        self.entry_inv_interval.delete(0, tk.END)
+        self.entry_inv_interval.insert(0, str(cfg.get("inventory_check_interval", 5)))
+
         self.time_cast_var.set(cfg.get("time_cast_enabled", False))
         self.entry_target_time.delete(0, tk.END)
         self.entry_target_time.insert(0, cfg.get("target_time_str", "01:00"))
@@ -532,6 +545,15 @@ class DashboardApp:
                 self.add_log("Stage Reset Sequence cleared.")
         else:
             self.add_log("Stage Reset Sequence selection cancelled.")
+
+    def _on_inv_interval_change(self):
+        try:
+            val = int(self.entry_inv_interval.get().strip())
+            val = max(1, val)
+            self.cfg_mgr.set("inventory_check_interval", val)
+            self.add_log(f"Inventory Cleanup Interval saved: Halt & Clean every {val} fish.")
+        except ValueError:
+            pass
 
     def _on_time_cast_toggle(self):
         val = self.time_cast_var.get()

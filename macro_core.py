@@ -31,6 +31,7 @@ class AutoFishingEngine:
         self.log_callback = None
         self.state_callback = None
         self.frame_queue = queue.Queue(maxsize=2)
+        self.completed_fish_count = 0
 
     def log(self, message):
         print(f"[Macro] {message}")
@@ -183,19 +184,21 @@ class AutoFishingEngine:
                     # If UI missing for 4 consecutive frames (~50-80ms), minigame ended
                     if ui_missing_count > 4:
                         self.mouse.force_release()
-                        self.log("⏹️ Minigame Complete / Caught Fish! Halting fishing cycle for inventory check...")
+                        self.completed_fish_count += 1
+                        check_interval = cfg.get("inventory_check_interval", 5)
+                        self.log(f"🐟 Fish Caught! Progress to next inventory cleanup: {self.completed_fish_count}/{check_interval}")
                         self.set_state(MacroState.RECAST_WAIT)
 
                 time.sleep(0.005) # ~120-200 FPS tracking loop
 
             # ---------------------------------------------------------
-            # STATE: RECAST WAIT & INVENTORY CHECK (VERIFIES MINIGAME ENDED)
+            # STATE: RECAST WAIT & INVENTORY CHECK (MILESTONE CYCLE HALT)
             # ---------------------------------------------------------
             elif self.state == MacroState.RECAST_WAIT:
                 self.mouse.force_release()
                 time.sleep(0.3)
 
-                # Strict Verification: Check that Minigame UI is 100% gone before touching inventory
+                # Strict Verification: Check that Minigame UI is 100% gone
                 if roi:
                     verify_frame = self.tracker.grab_roi(roi)
                     if self.tracker.is_ui_present(verify_frame):
@@ -203,11 +206,18 @@ class AutoFishingEngine:
                         self.set_state(MacroState.PLAYING)
                         continue
 
-                self.log("✅ Minigame verified finished. Halting fishing cycle for inventory processing...")
-                if hotbar_roi:
-                    self.set_state(MacroState.CLEANING_INVENTORY)
+                check_interval = cfg.get("inventory_check_interval", 5)
+
+                if self.completed_fish_count >= check_interval:
+                    self.log(f"🛑 MILESTONE REACHED ({self.completed_fish_count}/{check_interval} fish)! HALTING fishing cycle for Hotbar Cleanup & Tome Deletion...")
+                    self.completed_fish_count = 0
+                    if hotbar_roi:
+                        self.set_state(MacroState.CLEANING_INVENTORY)
+                    else:
+                        self.log("Hotbar ROI not calibrated! Resuming fishing cycle...")
+                        self._next_after_cycle(cfg)
                 else:
-                    self.log("Hotbar ROI not calibrated! Resuming fishing cycle...")
+                    self.log(f"Resuming fishing cycle ({self.completed_fish_count}/{check_interval} fish completed)...")
                     self._next_after_cycle(cfg)
 
             # ---------------------------------------------------------

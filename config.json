@@ -1,7 +1,7 @@
 {
     "cast_pos": [
-        1267,
-        354
+        998,
+        383
     ],
     "minigame_roi": [
         501,
@@ -12,16 +12,30 @@
     "cast_delay": 1.5,
     "recast_delay": 1.5,
     "kp": 0.08,
-    "kd": 0.05,
-    "kv": 0.03,
+    "kd": 0.03,
     "target_offset": 0,
-    "hotbar_roi": null,
-    "trash_pos": null,
-    "timer_roi": null,
-    "time_cast_enabled": false,
-    "target_time_str": "01:00",
-    "stage_reset_sequence": [],
     "min_ui_confidence": 0.5,
     "hotkey_start": "f5",
-    "hotkey_stop": "f8"
+    "hotkey_stop": "f8",
+    "kv": 0.03,
+    "hotbar_roi": [
+        607,
+        916,
+        1310,
+        1036
+    ],
+    "trash_pos": [
+        1361,
+        977
+    ],
+    "timer_roi": [
+        1103,
+        10,
+        1273,
+        56
+    ],
+    "time_cast_enabled": false,
+    "target_time_str": "01:54",
+    "stage_reset_sequence": [],
+    "inventory_check_interval": 5
 }
