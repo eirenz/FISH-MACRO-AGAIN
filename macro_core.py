@@ -196,29 +196,20 @@ class AutoFishingEngine:
             # ---------------------------------------------------------
             elif self.state == MacroState.RECAST_WAIT:
                 self.mouse.force_release()
-                # Wait 1.0s to guarantee character completes reel-in animation and bait is OUT of water
-                time.sleep(1.0)
-
-                # Strict Verification: Check that Minigame UI is 100% gone
-                if roi:
-                    verify_frame = self.tracker.grab_roi(roi)
-                    if self.tracker.is_ui_present(verify_frame):
-                        self.log("⚠️ Minigame UI still active! Resuming minigame tracking...")
-                        self.set_state(MacroState.PLAYING)
-                        continue
-
                 check_interval = cfg.get("inventory_check_interval", 5)
 
                 if self.completed_fish_count >= check_interval:
                     self.log(f"🛑 MILESTONE REACHED ({self.completed_fish_count}/{check_interval} Completed Fishing Cycles)! HALTING FISHING CYCLE FOR HOTBAR CLEANUP & DELETION...")
                     self.completed_fish_count = 0
+                    time.sleep(0.4) # Brief pause before hotbar cleanup
                     if hotbar_roi:
                         self.set_state(MacroState.CLEANING_INVENTORY)
                     else:
                         self.log("Hotbar ROI not calibrated! Resuming fishing cycle...")
                         self._next_after_cycle(cfg)
                 else:
-                    self.log(f"Resuming fishing cycle ({self.completed_fish_count}/{check_interval} cycles completed)...")
+                    self.log(f"⚡ Fast Recasting ({self.completed_fish_count}/{check_interval} cycles completed)...")
+                    time.sleep(0.20) # Fast 0.2s pause before next cast
                     self._next_after_cycle(cfg)
 
             # ---------------------------------------------------------
@@ -238,11 +229,10 @@ class AutoFishingEngine:
                 for slot_num in range(1, 7):
                     if not self.running:
                         break
-                    self.log(f"Pressing hotbar key '{slot_num}'...")
                     self.mouse.press_number_key(str(slot_num))
-                    time.sleep(0.15)
+                    time.sleep(0.08)
 
-                time.sleep(0.30)
+                time.sleep(0.15)
 
                 # STEP 2: DELETION PROCESS (DRAG HOTBAR ITEMS TO TRASH BUTTON) SECOND
                 if hotbar_roi and trash_pos:
@@ -270,8 +260,8 @@ class AutoFishingEngine:
 
                         slot_x_center = hx1 + (i + 0.5) * slot_w
                         self.log(f"🗑️ Dragging Slot {i+1} item to Trash Can button...")
-                        self.mouse.drag_and_drop((slot_x_center, slot_y_center), trash_pos, duration=0.35)
-                        time.sleep(0.20)
+                        self.mouse.drag_and_drop((slot_x_center, slot_y_center), trash_pos, duration=0.20)
+                        time.sleep(0.10)
                 elif not trash_pos:
                     self.log("⚠️ Trash Can button not calibrated! Skipping drag deletion.")
 
