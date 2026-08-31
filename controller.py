@@ -114,9 +114,10 @@ class MouseController:
 
 class PIDController:
     """
-    PID Controller tuned for tracking the fish icon with a physics-based slider bar.
-    - Pressing LMB accelerates the bar right.
+    Hysteresis & Momentum Controller tuned for tracking the fish icon with a physics-based slider bar.
+    - Holding LMB accelerates the bar right.
     - Releasing LMB lets gravity/momentum drop the bar left.
+    - Eliminates M1 click chattering during minigame.
     """
     def __init__(self, kp=0.08, kd=0.05, kv=0.03, target_offset=0):
         self.kp = kp
@@ -125,48 +126,33 @@ class PIDController:
         self.target_offset = target_offset
         self.prev_error = 0.0
         self.prev_time = time.time()
-        self.filtered_derivative = 0.0
-        self.pulse_counter = 0
+        self.current_state = False
+
+    def reset(self):
+        """Resets tracking state on minigame start."""
+        self.prev_error = 0.0
+        self.prev_time = time.time()
+        self.current_state = False
 
     def update(self, fish_x, bar_x, fish_vel=0.0):
         """
         Returns True if mouse should be PRESSED, False if RELEASED.
-        Uses deadband feathering to hover smoothly over the fish without endless LMB holding.
+        Uses Hysteresis window (-4px to +8px) to track smoothly without spam clicking.
         """
         now = time.time()
         dt = max(now - self.prev_time, 0.001)
         self.prev_time = now
 
-        # Target and Error calculation
         target_x = fish_x + self.target_offset
         error = target_x - bar_x
 
-        # Rate of error change (derivative)
-        raw_derivative = (error - self.prev_error) / dt
-        self.filtered_derivative = 0.6 * self.filtered_derivative + 0.4 * raw_derivative
-        self.prev_error = error
+        # Hysteresis switching:
+        # Upper threshold to start holding LMB
+        if error > 8.0:
+            self.current_state = True
+        # Lower threshold to release LMB
+        elif error < -4.0:
+            self.current_state = False
+        # Inside deadband (-4.0 <= error <= 8.0): maintain current hold/release state
 
-        self.pulse_counter = (self.pulse_counter + 1) % 6
-
-        # Deadband feathering logic:
-        if error > 18:
-            # Fish is significantly to the right -> hold LMB to accelerate right
-            should_press = True
-        elif error < -14:
-            # Fish is to the left -> release LMB completely to drop left
-            should_press = False
-        else:
-            # Bar is ON TOP of the fish (-14 <= error <= 18): Feather/Pulse LMB
-            if self.filtered_derivative < -5:
-                # Bar is falling away from fish -> pulse to catch
-                should_press = True
-            elif self.filtered_derivative > 10:
-                # Bar moving right fast -> release to prevent overshoot
-                should_press = False
-            else:
-                # Hover pulse (press 1 frame out of 3 to counteract gravity)
-                should_press = (self.pulse_counter == 0)
-
-        # Output signal u for debug logging
-        u = (self.kp * error) + (self.kd * self.filtered_derivative) + (self.kv * fish_vel)
-        return should_press, error, u
+        return self.current_state, error, 0.0

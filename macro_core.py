@@ -133,8 +133,7 @@ class AutoFishingEngine:
                     self.log("🎯 MINIGAME UI DETECTED! STOPPING M1 CLICK SPAM & STARTING MINIGAME...")
                     self.mouse.force_release()
                     ui_missing_count = 0
-                    self.pid.prev_error = 0.0
-                    self.pid.prev_time = time.time()
+                    self.pid.reset()
                     self.set_state(MacroState.PLAYING)
                 else:
                     # Fast continuous M1 spam click every 0.15s until UI appears
