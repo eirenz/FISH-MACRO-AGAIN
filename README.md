@@ -3,6 +3,8 @@
 A high-performance, automated Python fishing macro equipped with:
 - **Vision-Based Minigame Tracking:** Tracks blue capture bar and fish position at 100+ FPS using `mss` and `OpenCV`.
 - **Adaptive Velocity Control:** PID controller with velocity feed-forward ($K_v$) to adapt to fast bar movements and prevent overshooting.
+- **Time-Based Pitch Mode:** Reads in-game timer ROI via OCR/digit vision and throws bait at target times (e.g. `01:00`).
+- **Post-Minigame Stage Reset Sequence:** Custom multi-step click sequence generator to automatically retry stages or confirm post-game prompts.
 - **Continuous Storm-Fishing M1 Clicker:** Spam-clicks LMB while waiting for bites and instantly switches to minigame tracking upon UI appearance.
 - **Hotbar Inventory & Tome Removal:** Scans hotbar slots 1–6, double-clicks all items, and automatically drags **Tome** items to the Trash Can button.
 - **Modern Tkinter Dashboard GUI:** Click-and-drag overlays for spot/ROI calibration, live sensitivity sliders, real-time visual tracker preview, and global hotkeys (`F5` Start/Pause, `F8` Emergency Stop).
@@ -14,7 +16,7 @@ A high-performance, automated Python fishing macro equipped with:
 ### 1. Requirements
 Python 3.10+ with required libraries:
 ```bash
-pip install opencv-python numpy mss pynput pillow
+pip install opencv-python numpy mss pynput pillow pytesseract
 ```
 
 ### 2. Launch Macro
@@ -31,5 +33,7 @@ In the GUI Dashboard under **Calibration Setup**:
 2. **Set Minigame ROI:** Click and drag a box around the minigame bar.
 3. **Set Hotbar ROI:** Click and drag a box around slots 1–6.
 4. **Set Trash Button:** Click your in-game Trash Can icon.
+5. **Set Timer ROI:** Click and drag over the timer widget (e.g., `01:11`).
+6. **Set Stage Reset Sequence:** Manage multi-step click sequence for stage repetition.
 
 Press **F5** to start auto-fishing!

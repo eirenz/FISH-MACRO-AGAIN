@@ -13,6 +13,7 @@ class MacroState(Enum):
     PLAYING = "PLAYING"
     RECAST_WAIT = "RECAST_WAIT"
     CLEANING_INVENTORY = "CLEANING_INVENTORY"
+    REPEATING_STAGE = "REPEATING_STAGE"
 
 class AutoFishingEngine:
     def __init__(self, config_manager):
@@ -71,6 +72,14 @@ class AutoFishingEngine:
         self.pid.kv = kv
         self.pid.target_offset = target_offset
 
+    def _next_after_cycle(self, cfg):
+        """Determines next state after minigame / inventory clean (Stage Reset vs Cast)."""
+        stage_seq = cfg.get("stage_reset_sequence", [])
+        if stage_seq and len(stage_seq) > 0:
+            self.set_state(MacroState.REPEATING_STAGE)
+        else:
+            self.set_state(MacroState.CASTING)
+
     def _run_loop(self):
         ui_missing_count = 0
         wait_start_time = 0
@@ -81,11 +90,29 @@ class AutoFishingEngine:
             roi = cfg.get("minigame_roi")
             hotbar_roi = cfg.get("hotbar_roi")
             trash_pos = cfg.get("trash_pos")
+            timer_roi = cfg.get("timer_roi")
+            time_cast_enabled = cfg.get("time_cast_enabled", False)
+            target_time_str = cfg.get("target_time_str", "01:00")
+            stage_seq = cfg.get("stage_reset_sequence", [])
 
             # ---------------------------------------------------------
             # STATE: CASTING
             # ---------------------------------------------------------
             if self.state == MacroState.CASTING:
+                if time_cast_enabled and timer_roi:
+                    self.log(f"⏱️ Time-Based Pitch Mode active. Waiting for timer to match '{target_time_str}'...")
+                    matched = False
+                    while self.running and not matched:
+                        timer_crop = self.tracker.grab_roi(timer_roi)
+                        curr_time = self.tracker.read_timer_display(timer_crop)
+                        if curr_time:
+                            self.log(f"Timer reading: {curr_time} (Target: {target_time_str})")
+                            if curr_time == target_time_str:
+                                self.log(f"🎯 Target time '{target_time_str}' reached! Throwing bait now!")
+                                matched = True
+                                break
+                        time.sleep(0.2)
+
                 self.log("Starting bait casting...")
                 self.mouse.click_at(cast_pos[0], cast_pos[1])
                 wait_start_time = time.time()
@@ -178,9 +205,9 @@ class AutoFishingEngine:
                         self.log(f"Hotbar has items in slots: {[s+1 for s in occupied_slots]}. Processing...")
                         self.set_state(MacroState.CLEANING_INVENTORY)
                     else:
-                        self.set_state(MacroState.CASTING)
+                        self._next_after_cycle(cfg)
                 else:
-                    self.set_state(MacroState.CASTING)
+                    self._next_after_cycle(cfg)
 
             # ---------------------------------------------------------
             # STATE: CLEANING INVENTORY (Double Click Items & Delete Tomes)
@@ -188,7 +215,7 @@ class AutoFishingEngine:
             elif self.state == MacroState.CLEANING_INVENTORY:
                 if not hotbar_roi:
                     self.log("Hotbar ROI not calibrated! Skipping inventory check.")
-                    self.set_state(MacroState.CASTING)
+                    self._next_after_cycle(cfg)
                     continue
 
                 hotbar_img = self.tracker.grab_roi(hotbar_roi)
@@ -223,6 +250,26 @@ class AutoFishingEngine:
                             self.log(f"📜 TOME detected in Slot {i+1}, but Trash Can button is not calibrated!")
                     else:
                         self.log(f"Slot {i+1} item processed (Non-Tome).")
+
+                self._next_after_cycle(cfg)
+
+            # ---------------------------------------------------------
+            # STATE: REPEATING STAGE (Executing Post-Minigame Click Sequence)
+            # ---------------------------------------------------------
+            elif self.state == MacroState.REPEATING_STAGE:
+                if not stage_seq:
+                    self.set_state(MacroState.CASTING)
+                    continue
+
+                self.log(f"🔄 Executing Stage Reset Sequence ({len(stage_seq)} steps)...")
+                for idx, step in enumerate(stage_seq):
+                    if not self.running:
+                        break
+                    sx, sy = step["x"], step["y"]
+                    sdelay = step.get("delay", 1.0)
+                    self.log(f"Stage Reset Step {idx+1}/{len(stage_seq)}: Clicking ({sx}, {sy}), waiting {sdelay}s...")
+                    self.mouse.click_at(sx, sy)
+                    time.sleep(sdelay)
 
                 self.set_state(MacroState.CASTING)
 

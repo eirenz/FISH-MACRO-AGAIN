@@ -136,6 +136,65 @@ class ROISelectorOverlay:
             self.callback(x1, y1, x2, y2)
 
 
+class StageSequenceDialog:
+    """Dialog window to manage stage reset sequence clicks & delays."""
+    def __init__(self, parent, config_manager, on_update_callback):
+        self.cfg_mgr = config_manager
+        self.on_update = on_update_callback
+        
+        self.dialog = tk.Toplevel(parent)
+        self.dialog.title("🔄 Stage Reset Sequence Manager")
+        self.dialog.geometry("450x380")
+        self.dialog.config(bg="#1e1e28")
+        self.dialog.transient(parent)
+        self.dialog.grab_set()
+
+        self.steps = list(self.cfg_mgr.get().get("stage_reset_sequence", []))
+
+        tk.Label(self.dialog, text="Stage Reset Click Sequence", font=("Segoe UI", 12, "bold"), bg="#1e1e28", fg="#00d2ff").pack(anchor="w", padx=15, pady=(15, 5))
+        tk.Label(self.dialog, text="These click steps execute automatically after minigame / inventory clean to repeat the stage.", font=("Segoe UI", 8), bg="#1e1e28", fg="#aaaaaa", wraplength=420, justify="left").pack(anchor="w", padx=15, pady=(0, 10))
+
+        # Listbox frame
+        list_frame = tk.Frame(self.dialog, bg="#1e1e28")
+        list_frame.pack(fill=tk.BOTH, expand=True, padx=15, pady=5)
+
+        self.listbox = tk.Listbox(list_frame, bg="#111118", fg="#00ff88", font=("Consolas", 10), selectbackground="#2a2a3c", highlightthickness=0, bd=1, relief="solid")
+        self.listbox.pack(fill=tk.BOTH, expand=True, side=tk.LEFT)
+
+        # Buttons frame
+        btn_frame = tk.Frame(self.dialog, bg="#1e1e28")
+        btn_frame.pack(fill=tk.X, padx=15, pady=15)
+
+        tk.Button(btn_frame, text="➕ Add Click Step", font=("Segoe UI", 9, "bold"), bg="#009944", fg="#ffffff", activebackground="#00cc55", relief="flat", padx=10, pady=6, command=self.on_add_step).pack(side=tk.LEFT, padx=(0, 10))
+        tk.Button(btn_frame, text="🗑️ Clear All", font=("Segoe UI", 9, "bold"), bg="#cc2222", fg="#ffffff", activebackground="#ff3333", relief="flat", padx=10, pady=6, command=self.on_clear_steps).pack(side=tk.LEFT)
+        tk.Button(btn_frame, text="Done", font=("Segoe UI", 9, "bold"), bg="#333344", fg="#ffffff", activebackground="#444455", relief="flat", padx=15, pady=6, command=self.dialog.destroy).pack(side=tk.RIGHT)
+
+        self._refresh_listbox()
+
+    def _refresh_listbox(self):
+        self.listbox.delete(0, tk.END)
+        for idx, step in enumerate(self.steps):
+            self.listbox.insert(tk.END, f"Step {idx+1}: Click ({step['x']}, {step['y']})  [Wait {step['delay']}s]")
+
+    def on_add_step(self):
+        self.dialog.iconify()
+        SpotSelectorOverlay(self._on_step_pos_selected)
+
+    def _on_step_pos_selected(self, x, y):
+        self.dialog.deiconify()
+        # Default 1.0s delay per step
+        self.steps.append({"x": x, "y": y, "delay": 1.0})
+        self.cfg_mgr.set("stage_reset_sequence", self.steps)
+        self._refresh_listbox()
+        self.on_update()
+
+    def on_clear_steps(self):
+        self.steps = []
+        self.cfg_mgr.set("stage_reset_sequence", self.steps)
+        self._refresh_listbox()
+        self.on_update()
+
+
 class DashboardApp:
     def __init__(self, root, engine, config_manager):
         self.root = root
@@ -143,7 +202,7 @@ class DashboardApp:
         self.cfg_mgr = config_manager
         
         self.root.title("Auto Fishing Macro - Professional Dashboard")
-        self.root.geometry("840x740")
+        self.root.geometry("860x780")
         self.root.config(bg="#181820")
         self.root.resizable(False, False)
 
@@ -182,65 +241,96 @@ class DashboardApp:
         body = tk.Frame(self.root, bg="#181820")
         body.pack(fill=tk.BOTH, expand=True, padx=15, pady=15)
 
-        left_col = tk.Frame(body, bg="#181820", width=420)
+        left_col = tk.Frame(body, bg="#181820", width=430)
         left_col.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 10))
 
         right_col = tk.Frame(body, bg="#181820", width=380)
         right_col.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True)
 
         # -------------------------------------------------------------
-        # LEFT COLUMN: Calibration & Control
+        # LEFT COLUMN: Calibration & Controls
         # -------------------------------------------------------------
         # Card 1: Calibration
-        card1 = tk.LabelFrame(left_col, text=" 📍 Calibration Setup ", font=("Segoe UI", 11, "bold"), bg="#222230", fg="#00d2ff", padx=12, pady=12, bd=1, relief="solid")
+        card1 = tk.LabelFrame(left_col, text=" 📍 Calibration Setup ", font=("Segoe UI", 11, "bold"), bg="#222230", fg="#00d2ff", padx=12, pady=10, bd=1, relief="solid")
         card1.pack(fill=tk.X, pady=(0, 10))
 
-        # 1. Cast spot
-        btn_cast = tk.Button(card1, text="🎯 1. Set Cast Spot", font=("Segoe UI", 9, "bold"), bg="#2b2b40", fg="#ffffff", activebackground="#3d3d5c", activeforeground="#ffffff", relief="flat", pady=4, command=self.on_set_cast_spot)
-        btn_cast.pack(fill=tk.X, pady=(0, 2))
+        # Grid of calibration buttons (2 columns)
+        g_frame = tk.Frame(card1, bg="#222230")
+        g_frame.pack(fill=tk.X)
+
+        btn_cast = tk.Button(g_frame, text="🎯 1. Cast Spot", font=("Segoe UI", 8, "bold"), bg="#2b2b40", fg="#ffffff", activebackground="#3d3d5c", relief="flat", pady=4, command=self.on_set_cast_spot)
+        btn_cast.grid(row=0, column=0, sticky="ew", padx=(0, 4), pady=(0, 2))
+
+        btn_roi = tk.Button(g_frame, text="📐 2. Minigame ROI", font=("Segoe UI", 8, "bold"), bg="#2b2b40", fg="#ffffff", activebackground="#3d3d5c", relief="flat", pady=4, command=self.on_set_roi)
+        btn_roi.grid(row=0, column=1, sticky="ew", padx=(4, 0), pady=(0, 2))
+
+        btn_hotbar = tk.Button(g_frame, text="📦 3. Hotbar ROI", font=("Segoe UI", 8, "bold"), bg="#2b2b40", fg="#ffffff", activebackground="#3d3d5c", relief="flat", pady=4, command=self.on_set_hotbar_roi)
+        btn_hotbar.grid(row=1, column=0, sticky="ew", padx=(0, 4), pady=(0, 2))
+
+        btn_trash = tk.Button(g_frame, text="🗑️ 4. Trash Button", font=("Segoe UI", 8, "bold"), bg="#2b2b40", fg="#ffffff", activebackground="#3d3d5c", relief="flat", pady=4, command=self.on_set_trash_pos)
+        btn_trash.grid(row=1, column=1, sticky="ew", padx=(4, 0), pady=(0, 2))
+
+        btn_timer = tk.Button(g_frame, text="⏱️ 5. Timer ROI", font=("Segoe UI", 8, "bold"), bg="#2b2b40", fg="#ffffff", activebackground="#3d3d5c", relief="flat", pady=4, command=self.on_set_timer_roi)
+        btn_timer.grid(row=2, column=0, sticky="ew", padx=(0, 4), pady=(0, 2))
+
+        btn_seq = tk.Button(g_frame, text="🔄 6. Stage Sequence", font=("Segoe UI", 8, "bold"), bg="#2b2b40", fg="#ffffff", activebackground="#3d3d5c", relief="flat", pady=4, command=self.on_manage_stage_sequence)
+        btn_seq.grid(row=2, column=1, sticky="ew", padx=(4, 0), pady=(0, 2))
+
+        g_frame.columnconfigure(0, weight=1)
+        g_frame.columnconfigure(1, weight=1)
+
+        # Status labels
         self.lbl_cast_pos = tk.Label(card1, text="Cast Spot: Not Set", font=("Segoe UI", 8), bg="#222230", fg="#8888aa", anchor="w")
-        self.lbl_cast_pos.pack(fill=tk.X, pady=(0, 6))
-
-        # 2. Minigame ROI
-        btn_roi = tk.Button(card1, text="📐 2. Set Minigame ROI", font=("Segoe UI", 9, "bold"), bg="#2b2b40", fg="#ffffff", activebackground="#3d3d5c", activeforeground="#ffffff", relief="flat", pady=4, command=self.on_set_roi)
-        btn_roi.pack(fill=tk.X, pady=(0, 2))
+        self.lbl_cast_pos.pack(fill=tk.X)
         self.lbl_roi_pos = tk.Label(card1, text="Minigame ROI: Not Set", font=("Segoe UI", 8), bg="#222230", fg="#8888aa", anchor="w")
-        self.lbl_roi_pos.pack(fill=tk.X, pady=(0, 6))
-
-        # 3. Hotbar ROI
-        btn_hotbar = tk.Button(card1, text="📦 3. Set Hotbar ROI (Slots 1-6)", font=("Segoe UI", 9, "bold"), bg="#2b2b40", fg="#ffffff", activebackground="#3d3d5c", activeforeground="#ffffff", relief="flat", pady=4, command=self.on_set_hotbar_roi)
-        btn_hotbar.pack(fill=tk.X, pady=(0, 2))
+        self.lbl_roi_pos.pack(fill=tk.X)
         self.lbl_hotbar_pos = tk.Label(card1, text="Hotbar ROI: Not Set", font=("Segoe UI", 8), bg="#222230", fg="#8888aa", anchor="w")
-        self.lbl_hotbar_pos.pack(fill=tk.X, pady=(0, 6))
-
-        # 4. Trash Can button
-        btn_trash = tk.Button(card1, text="🗑️ 4. Set Trash Button", font=("Segoe UI", 9, "bold"), bg="#2b2b40", fg="#ffffff", activebackground="#3d3d5c", activeforeground="#ffffff", relief="flat", pady=4, command=self.on_set_trash_pos)
-        btn_trash.pack(fill=tk.X, pady=(0, 2))
+        self.lbl_hotbar_pos.pack(fill=tk.X)
         self.lbl_trash_pos = tk.Label(card1, text="Trash Button: Not Set", font=("Segoe UI", 8), bg="#222230", fg="#8888aa", anchor="w")
         self.lbl_trash_pos.pack(fill=tk.X)
+        self.lbl_timer_pos = tk.Label(card1, text="Timer ROI: Not Set", font=("Segoe UI", 8), bg="#222230", fg="#8888aa", anchor="w")
+        self.lbl_timer_pos.pack(fill=tk.X)
+        self.lbl_seq_pos = tk.Label(card1, text="Stage Sequence: 0 steps", font=("Segoe UI", 8), bg="#222230", fg="#8888aa", anchor="w")
+        self.lbl_seq_pos.pack(fill=tk.X)
 
-        # Card 2: PID Sensitivity Tuning
-        card2 = tk.LabelFrame(left_col, text=" ⚙️ Sensitivity & PID Controls ", font=("Segoe UI", 11, "bold"), bg="#222230", fg="#00d2ff", padx=12, pady=10, bd=1, relief="solid")
-        card2.pack(fill=tk.X, pady=(0, 10))
+        # Card 2: Time-Based Pitch Mode Options
+        card_time = tk.LabelFrame(left_col, text=" ⏱️ Time-Based Pitch Mode ", font=("Segoe UI", 11, "bold"), bg="#222230", fg="#00d2ff", padx=12, pady=8, bd=1, relief="solid")
+        card_time.pack(fill=tk.X, pady=(0, 10))
+
+        self.time_cast_var = tk.BooleanVar()
+        chk_time = tk.Checkbutton(card_time, text="Enable Time-Based Casting", variable=self.time_cast_var, font=("Segoe UI", 9, "bold"), bg="#222230", fg="#ffffff", selectcolor="#181820", activebackground="#222230", activeforeground="#ffffff", command=self._on_time_cast_toggle)
+        chk_time.pack(anchor="w", pady=(0, 4))
+
+        time_frame = tk.Frame(card_time, bg="#222230")
+        time_frame.pack(fill=tk.X)
+        tk.Label(time_frame, text="Target Time (MM:SS):", font=("Segoe UI", 8, "bold"), bg="#222230", fg="#aaaaaa").pack(side=tk.LEFT)
+        self.entry_target_time = tk.Entry(time_frame, font=("Consolas", 10, "bold"), width=8, bg="#111118", fg="#00ff88", insertbackground="white", bd=1, relief="solid")
+        self.entry_target_time.pack(side=tk.LEFT, padx=8)
+        self.entry_target_time.bind("<FocusOut>", lambda e: self._on_target_time_change())
+        self.entry_target_time.bind("<Return>", lambda e: self._on_target_time_change())
+
+        # Card 3: PID Sensitivity Tuning
+        card3 = tk.LabelFrame(left_col, text=" ⚙️ Sensitivity & PID Controls ", font=("Segoe UI", 11, "bold"), bg="#222230", fg="#00d2ff", padx=12, pady=8, bd=1, relief="solid")
+        card3.pack(fill=tk.X, pady=(0, 10))
 
         # Kp Slider
-        tk.Label(card2, text="Sensitivity (Kp - Response Force):", bg="#222230", fg="#ffffff", font=("Segoe UI", 8, "bold")).pack(anchor="w")
-        self.slider_kp = tk.Scale(card2, from_=0.01, to=0.30, resolution=0.01, orient=tk.HORIZONTAL, bg="#222230", fg="#00d2ff", highlightthickness=0, command=self._on_pid_slider_change)
-        self.slider_kp.pack(fill=tk.X, pady=(0, 4))
+        tk.Label(card3, text="Sensitivity (Kp - Response Force):", bg="#222230", fg="#ffffff", font=("Segoe UI", 8, "bold")).pack(anchor="w")
+        self.slider_kp = tk.Scale(card3, from_=0.01, to=0.30, resolution=0.01, orient=tk.HORIZONTAL, bg="#222230", fg="#00d2ff", highlightthickness=0, command=self._on_pid_slider_change)
+        self.slider_kp.pack(fill=tk.X, pady=(0, 2))
 
         # Kd Slider
-        tk.Label(card2, text="Damping (Kd - Momentum Stop):", bg="#222230", fg="#ffffff", font=("Segoe UI", 8, "bold")).pack(anchor="w")
-        self.slider_kd = tk.Scale(card2, from_=0.00, to=0.20, resolution=0.01, orient=tk.HORIZONTAL, bg="#222230", fg="#00d2ff", highlightthickness=0, command=self._on_pid_slider_change)
-        self.slider_kd.pack(fill=tk.X, pady=(0, 4))
+        tk.Label(card3, text="Damping (Kd - Momentum Stop):", bg="#222230", fg="#ffffff", font=("Segoe UI", 8, "bold")).pack(anchor="w")
+        self.slider_kd = tk.Scale(card3, from_=0.00, to=0.20, resolution=0.01, orient=tk.HORIZONTAL, bg="#222230", fg="#00d2ff", highlightthickness=0, command=self._on_pid_slider_change)
+        self.slider_kd.pack(fill=tk.X, pady=(0, 2))
 
         # Kv Slider (Velocity Feedforward)
-        tk.Label(card2, text="Velocity Gain (Kv - Predictive Burst):", bg="#222230", fg="#ffffff", font=("Segoe UI", 8, "bold")).pack(anchor="w")
-        self.slider_kv = tk.Scale(card2, from_=0.00, to=0.10, resolution=0.01, orient=tk.HORIZONTAL, bg="#222230", fg="#00d2ff", highlightthickness=0, command=self._on_pid_slider_change)
-        self.slider_kv.pack(fill=tk.X, pady=(0, 4))
+        tk.Label(card3, text="Velocity Gain (Kv - Predictive Burst):", bg="#222230", fg="#ffffff", font=("Segoe UI", 8, "bold")).pack(anchor="w")
+        self.slider_kv = tk.Scale(card3, from_=0.00, to=0.10, resolution=0.01, orient=tk.HORIZONTAL, bg="#222230", fg="#00d2ff", highlightthickness=0, command=self._on_pid_slider_change)
+        self.slider_kv.pack(fill=tk.X, pady=(0, 2))
 
         # Offset Slider
-        tk.Label(card2, text="Target Offset (Offset Pixel Bias):", bg="#222230", fg="#ffffff", font=("Segoe UI", 8, "bold")).pack(anchor="w")
-        self.slider_offset = tk.Scale(card2, from_=-30, to=30, resolution=1, orient=tk.HORIZONTAL, bg="#222230", fg="#00d2ff", highlightthickness=0, command=self._on_pid_slider_change)
+        tk.Label(card3, text="Target Offset (Offset Pixel Bias):", bg="#222230", fg="#ffffff", font=("Segoe UI", 8, "bold")).pack(anchor="w")
+        self.slider_offset = tk.Scale(card3, from_=-30, to=30, resolution=1, orient=tk.HORIZONTAL, bg="#222230", fg="#00d2ff", highlightthickness=0, command=self._on_pid_slider_change)
         self.slider_offset.pack(fill=tk.X)
 
         # Action Buttons (Start / Stop)
@@ -293,6 +383,19 @@ class DashboardApp:
         if cfg.get("trash_pos"):
             pos = cfg["trash_pos"]
             self.lbl_trash_pos.config(text=f"Trash Button: X={pos[0]}, Y={pos[1]}", fg="#00ff88")
+
+        if cfg.get("timer_roi"):
+            roi = cfg["timer_roi"]
+            w = roi[2] - roi[0]
+            h = roi[3] - roi[1]
+            self.lbl_timer_pos.config(text=f"Timer ROI: ({roi[0]},{roi[1]}) -> {w}x{h}px", fg="#00ff88")
+
+        seq = cfg.get("stage_reset_sequence", [])
+        self.lbl_seq_pos.config(text=f"Stage Sequence: {len(seq)} click step(s)", fg="#00ff88" if seq else "#8888aa")
+
+        self.time_cast_var.set(cfg.get("time_cast_enabled", False))
+        self.entry_target_time.delete(0, tk.END)
+        self.entry_target_time.insert(0, cfg.get("target_time_str", "01:00"))
 
         self.slider_kp.set(cfg.get("kp", 0.08))
         self.slider_kd.set(cfg.get("kd", 0.05))
@@ -352,6 +455,36 @@ class DashboardApp:
         self.lbl_trash_pos.config(text=f"Trash Button: X={x}, Y={y}", fg="#00ff88")
         self.add_log(f"Trash Button position saved: ({x}, {y})")
 
+    def on_set_timer_roi(self):
+        self.root.iconify()
+        ROISelectorOverlay(self._on_timer_roi_selected)
+
+    def _on_timer_roi_selected(self, x1, y1, x2, y2):
+        self.root.deiconify()
+        roi = [x1, y1, x2, y2]
+        self.cfg_mgr.set("timer_roi", roi)
+        w = x2 - x1
+        h = y2 - y1
+        self.lbl_timer_pos.config(text=f"Timer ROI: ({x1},{y1}) -> {w}x{h}px", fg="#00ff88")
+        self.add_log(f"Timer ROI saved: ({x1},{y1}) to ({x2},{y2}) [{w}x{h}px]")
+
+    def on_manage_stage_sequence(self):
+        StageSequenceDialog(self.root, self.cfg_mgr, self._update_seq_label)
+
+    def _update_seq_label(self):
+        seq = self.cfg_mgr.get().get("stage_reset_sequence", [])
+        self.lbl_seq_pos.config(text=f"Stage Sequence: {len(seq)} click step(s)", fg="#00ff88" if seq else "#8888aa")
+
+    def _on_time_cast_toggle(self):
+        val = self.time_cast_var.get()
+        self.cfg_mgr.set("time_cast_enabled", val)
+        self.add_log(f"Time-Based Pitch Mode: {'ENABLED' if val else 'DISABLED'}")
+
+    def _on_target_time_change(self):
+        val = self.entry_target_time.get().strip()
+        self.cfg_mgr.set("target_time_str", val)
+        self.add_log(f"Target Cast Time saved: '{val}'")
+
     def _on_pid_slider_change(self, val):
         kp = float(self.slider_kp.get())
         kd = float(self.slider_kd.get())
@@ -378,7 +511,8 @@ class DashboardApp:
             "WAITING_FOR_UI": ("STATUS: WAITING FOR BITE", "#0066aa", "#00d2ff"),
             "PLAYING": ("STATUS: PLAYING MINIGAME", "#009944", "#00ff88"),
             "RECAST_WAIT": ("STATUS: FISH CAUGHT (WAITING)", "#660088", "#e088ff"),
-            "CLEANING_INVENTORY": ("STATUS: PROCESSING HOTBAR / TOMES", "#cc0088", "#ff88ee")
+            "CLEANING_INVENTORY": ("STATUS: PROCESSING HOTBAR / TOMES", "#cc0088", "#ff88ee"),
+            "REPEATING_STAGE": ("STATUS: REPEATING STAGE SEQUENCE", "#0088cc", "#88e0ff")
         }
         text, bg, fg = badge_colors.get(state.value, ("STATUS: IDLE", "#333344", "#aaaaaa"))
         self.status_badge.config(text=text, bg=bg, fg=fg)

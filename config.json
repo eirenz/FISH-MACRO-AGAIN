@@ -17,6 +17,10 @@
     "target_offset": 0,
     "hotbar_roi": null,
     "trash_pos": null,
+    "timer_roi": null,
+    "time_cast_enabled": false,
+    "target_time_str": "01:00",
+    "stage_reset_sequence": [],
     "min_ui_confidence": 0.5,
     "hotkey_start": "f5",
     "hotkey_stop": "f8"

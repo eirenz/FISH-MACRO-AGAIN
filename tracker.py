@@ -216,3 +216,45 @@ class VisionTracker:
         is_tome = (purple_pixels > 60 and red_pixels > 10) or (purple_pixels > 120)
         return is_tome
 
+    def read_timer_display(self, timer_crop):
+        """
+        Reads digits from the Timer ROI display (e.g. '01:11').
+        Returns string 'MM:SS' or None if unreadable.
+        """
+        if timer_crop is None or timer_crop.size == 0:
+            return None
+
+        import re
+        try:
+            import pytesseract
+            # Preprocess image for OCR
+            gray = cv2.cvtColor(timer_crop, cv2.COLOR_BGR2GRAY)
+            # Upscale 2.5x for crisp digit contours
+            scaled = cv2.resize(gray, (0, 0), fx=2.5, fy=2.5, interpolation=cv2.INTER_CUBIC)
+            # Contrast thresholding
+            _, thresh = cv2.threshold(scaled, 180, 255, cv2.THRESH_BINARY | cv2.THRESH_OTSU)
+
+            # OCR with whitelist
+            text = pytesseract.image_to_string(thresh, config='--psm 7 -c tessedit_char_whitelist=0123456789:')
+            text = text.strip()
+
+            # Find MM:SS pattern
+            match = re.search(r'\d{1,2}:\d{2}', text)
+            if match:
+                parts = match.group(0).split(':')
+                m, s = int(parts[0]), int(parts[1])
+                return f"{m:02d}:{s:02d}"
+
+            # Fallback: digits only (e.g. "0111" -> "01:11")
+            digits = re.sub(r'[^\d]', '', text)
+            if len(digits) == 4:
+                return f"{digits[:2]}:{digits[2:]}"
+            elif len(digits) == 3:
+                return f"0{digits[0]}:{digits[1:]}"
+
+        except Exception as e:
+            pass
+
+        return None
+
+
