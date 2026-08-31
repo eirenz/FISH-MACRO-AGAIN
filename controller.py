@@ -14,20 +14,37 @@ class MOUSEINPUT(ctypes.Structure):
         ("dwExtraInfo", PUL)
     ]
 
-class INPUT_UNION(ctypes.Union):
-    _fields_ = [("mi", MOUSEINPUT)]
-
-class INPUT(ctypes.Structure):
+class KEYBDINPUT(ctypes.Structure):
     _fields_ = [
-        ("type", ctypes.c_ulong),
-        ("u", INPUT_UNION)
+        ("wVk", ctypes.c_ushort),
+        ("wScan", ctypes.c_ushort),
+        ("dwFlags", ctypes.c_ulong),
+        ("time", ctypes.c_ulong),
+        ("dwExtraInfo", PUL)
     ]
 
+class INPUT_UNION(ctypes.Union):
+    _fields_ = [("mi", MOUSEINPUT), ("ki", KEYBDINPUT)]
+
 INPUT_MOUSE = 0
+INPUT_KEYBOARD = 1
 MOUSEEVENTF_LEFTDOWN = 0x0002
 MOUSEEVENTF_LEFTUP = 0x0004
 MOUSEEVENTF_MOVE = 0x0001
 MOUSEEVENTF_ABSOLUTE = 0x8000
+KEYEVENTF_KEYDOWN = 0x0000
+KEYEVENTF_KEYUP = 0x0002
+KEYEVENTF_SCANCODE = 0x0008
+
+# Hardware Scan Codes for DirectInput / Roblox ('1'..'6')
+SCAN_CODES = {
+    1: 0x02,  # '1'
+    2: 0x03,  # '2'
+    3: 0x04,  # '3'
+    4: 0x05,  # '4'
+    5: 0x06,  # '5'
+    6: 0x07   # '6'
+}
 
 def _send_input(flags):
     extra = ctypes.c_ulong(0)
@@ -37,7 +54,7 @@ def _send_input(flags):
     ctypes.windll.user32.SendInput(1, ctypes.pointer(cmd), ctypes.sizeof(cmd))
 
 class MouseController:
-    """Low-latency Win32 mouse controller."""
+    """Low-latency Win32 mouse & hardware keyboard controller."""
     def __init__(self):
         self.is_down = False
 
@@ -65,7 +82,7 @@ class MouseController:
         _send_input(MOUSEEVENTF_LEFTUP)
         self.is_down = False
 
-    def drag_and_drop(self, from_pos, to_pos, duration=0.35):
+    def drag_and_drop(self, from_pos, to_pos, duration=0.40):
         """Smoothly drag from from_pos to to_pos by holding LMB with DirectX/Roblox mouse move events."""
         fx, fy = int(from_pos[0]), int(from_pos[1])
         tx, ty = int(to_pos[0]), int(to_pos[1])
@@ -74,53 +91,60 @@ class MouseController:
         screen_h = ctypes.windll.user32.GetSystemMetrics(1)
 
         def move_cursor_event(x, y):
-            # Update OS cursor position
             ctypes.windll.user32.SetCursorPos(int(x), int(y))
-            # Send DirectX / RawInput absolute move event (0x0001 = MOVE, 0x8000 = ABSOLUTE)
             abs_x = int(x * 65535 / screen_w)
             abs_y = int(y * 65535 / screen_h)
             ctypes.windll.user32.mouse_event(0x0001 | 0x8000, abs_x, abs_y, 0, 0)
 
         # Move to item slot center
         move_cursor_event(fx, fy)
-        time.sleep(0.08)
+        time.sleep(0.10)
         
         # Press left mouse down
         _send_input(MOUSEEVENTF_LEFTDOWN)
         self.is_down = True
 
-        # CRITICAL: Hold in place for 0.12s so UI registers item drag pickup
-        time.sleep(0.12)
+        # CRITICAL: Hold in place for 0.18s so Roblox UI registers item drag pickup
+        time.sleep(0.18)
 
         # Smooth movement interpolation to target position with real move events
         steps = 25
-        step_delay = max(duration / steps, 0.008)
+        step_delay = max(duration / steps, 0.010)
         for i in range(1, steps + 1):
             cx = int(fx + (tx - fx) * (i / steps))
             cy = int(fy + (ty - fy) * (i / steps))
             move_cursor_event(cx, cy)
             time.sleep(step_delay)
 
-        # Hold over trash target for 0.1s before releasing
-        time.sleep(0.10)
+        # Hold over trash target for 0.15s before releasing
+        time.sleep(0.15)
 
         # Release left mouse button twice
         _send_input(MOUSEEVENTF_LEFTUP)
         _send_input(MOUSEEVENTF_LEFTUP)
         self.is_down = False
-        time.sleep(0.08)
+        time.sleep(0.10)
 
     def press_number_key(self, num_str):
-        """Presses keyboard number key '1', '2', '3', '4', '5', or '6'."""
+        """Presses hardware scan code for number keys '1'..'6' (DirectInput / Roblox compatible)."""
         try:
             val = int(num_str)
-            if 1 <= val <= 6:
-                vk = 0x30 + val  # 0x31 for '1', 0x36 for '6'
-                ctypes.windll.user32.keybd_event(vk, 0, 0, 0)
-                time.sleep(0.05)
-                ctypes.windll.user32.keybd_event(vk, 0, 2, 0)  # KEYEVENTF_KEYUP = 0x0002
-        except Exception:
-            pass
+            scan_code = SCAN_CODES.get(val, 0)
+            if scan_code:
+                extra = ctypes.c_ulong(0)
+                # KEY DOWN (Hardware Scan Code)
+                ki_down = KEYBDINPUT(0, scan_code, KEYEVENTF_SCANCODE, 0, ctypes.pointer(extra))
+                cmd_down = INPUT(ctypes.c_ulong(INPUT_KEYBOARD), INPUT_UNION(ki=ki_down))
+                ctypes.windll.user32.SendInput(1, ctypes.pointer(cmd_down), ctypes.sizeof(cmd_down))
+                time.sleep(0.06)
+
+                # KEY UP (Hardware Scan Code)
+                ki_up = KEYBDINPUT(0, scan_code, KEYEVENTF_SCANCODE | KEYEVENTF_KEYUP, 0, ctypes.pointer(extra))
+                cmd_up = INPUT(ctypes.c_ulong(INPUT_KEYBOARD), INPUT_UNION(ki=ki_up))
+                ctypes.windll.user32.SendInput(1, ctypes.pointer(cmd_up), ctypes.sizeof(cmd_up))
+                time.sleep(0.08)
+        except Exception as e:
+            print(f"Keypress error: {e}")
 
 
 class PIDController:

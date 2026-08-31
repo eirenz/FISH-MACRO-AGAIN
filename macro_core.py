@@ -196,7 +196,8 @@ class AutoFishingEngine:
             # ---------------------------------------------------------
             elif self.state == MacroState.RECAST_WAIT:
                 self.mouse.force_release()
-                time.sleep(0.3)
+                # Wait 1.0s to guarantee character completes reel-in animation and bait is OUT of water
+                time.sleep(1.0)
 
                 # Strict Verification: Check that Minigame UI is 100% gone
                 if roi:
@@ -209,7 +210,7 @@ class AutoFishingEngine:
                 check_interval = cfg.get("inventory_check_interval", 5)
 
                 if self.completed_fish_count >= check_interval:
-                    self.log(f"🛑 MILESTONE REACHED ({self.completed_fish_count}/{check_interval} fish)! HALTING fishing cycle for Hotbar Cleanup & Tome Deletion...")
+                    self.log(f"🛑 MILESTONE REACHED ({self.completed_fish_count}/{check_interval} fish)! HALTING fishing cycle for Hotbar Cleanup & Deletion...")
                     self.completed_fish_count = 0
                     if hotbar_roi:
                         self.set_state(MacroState.CLEANING_INVENTORY)
@@ -232,16 +233,16 @@ class AutoFishingEngine:
                         self.set_state(MacroState.PLAYING)
                         continue
 
-                # STEP 1: KEY PRESSES 1..6 FIRST
-                self.log("📦 STEP 1: Pressing hotbar keys 1, 2, 3, 4, 5, 6 FIRST...")
+                # STEP 1: KEY PRESSES 1..6 FIRST (Hardware Scan Codes)
+                self.log("📦 STEP 1: Pressing hotbar keys 1, 2, 3, 4, 5, 6 FIRST (Hardware DirectInput Scan Codes)...")
                 for slot_num in range(1, 7):
                     if not self.running:
                         break
                     self.log(f"Pressing hotbar key '{slot_num}'...")
                     self.mouse.press_number_key(str(slot_num))
-                    time.sleep(0.12)
+                    time.sleep(0.15)
 
-                time.sleep(0.25)
+                time.sleep(0.30)
 
                 # STEP 2: DELETION PROCESS (DRAG HOTBAR ITEMS TO TRASH BUTTON) SECOND
                 if hotbar_roi and trash_pos:
