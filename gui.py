@@ -50,12 +50,12 @@ class ConfigManager:
 
 
 class SpotSelectorOverlay:
-    """Full-screen overlay to select cast coordinates."""
-    def __init__(self, callback):
+    """Full-screen overlay to select screen coordinates."""
+    def __init__(self, callback, prompt="🎯 LEFT-CLICK anywhere to set location (Press ESC to cancel)"):
         self.callback = callback
         self.root = tk.Toplevel()
         self.root.attributes("-fullscreen", True)
-        self.root.attributes("-alpha", 0.3)
+        self.root.attributes("-alpha", 0.35)
         self.root.attributes("-topmost", True)
         self.root.config(bg="gray")
         self.root.config(cursor="cross")
@@ -63,31 +63,49 @@ class SpotSelectorOverlay:
         self.canvas = tk.Canvas(self.root, bg="black", highlightthickness=0)
         self.canvas.pack(fill=tk.BOTH, expand=True)
 
-        # Instruction text
+        # Instruction banner
         self.canvas.create_text(
             self.root.winfo_screenwidth() // 2,
             50,
-            text="🎯 LEFT-CLICK anywhere to set the Fishing Cast Spot (Press ESC to cancel)",
+            text=prompt,
             fill="white",
             font=("Segoe UI", 16, "bold")
         )
 
+        self.root.lift()
+        self.root.focus_force()
+        try:
+            self.root.grab_set()
+        except Exception:
+            pass
+
         self.root.bind("<Button-1>", self.on_click)
-        self.root.bind("<Escape>", lambda e: self.root.destroy())
+        self.root.bind("<Escape>", self.on_cancel)
 
     def on_click(self, event):
         x, y = event.x_root, event.y_root
+        try:
+            self.root.grab_release()
+        except Exception:
+            pass
         self.root.destroy()
         self.callback(x, y)
 
+    def on_cancel(self, event):
+        try:
+            self.root.grab_release()
+        except Exception:
+            pass
+        self.root.destroy()
+
 
 class ROISelectorOverlay:
-    """Full-screen overlay to select minigame region of interest (ROI)."""
-    def __init__(self, callback):
+    """Full-screen overlay to select region of interest (ROI)."""
+    def __init__(self, callback, prompt="📐 CLICK & DRAG to select region (Press ESC to cancel)"):
         self.callback = callback
         self.root = tk.Toplevel()
         self.root.attributes("-fullscreen", True)
-        self.root.attributes("-alpha", 0.3)
+        self.root.attributes("-alpha", 0.35)
         self.root.attributes("-topmost", True)
         self.root.config(cursor="cross")
 
@@ -98,7 +116,7 @@ class ROISelectorOverlay:
         self.canvas.create_text(
             self.root.winfo_screenwidth() // 2,
             50,
-            text="📐 CLICK & DRAG to select the Minigame Bar Region (Press ESC to cancel)",
+            text=prompt,
             fill="cyan",
             font=("Segoe UI", 16, "bold")
         )
@@ -107,10 +125,17 @@ class ROISelectorOverlay:
         self.start_y = None
         self.rect = None
 
+        self.root.lift()
+        self.root.focus_force()
+        try:
+            self.root.grab_set()
+        except Exception:
+            pass
+
         self.root.bind("<ButtonPress-1>", self.on_press)
         self.root.bind("<B1-Motion>", self.on_drag)
         self.root.bind("<ButtonRelease-1>", self.on_release)
-        self.root.bind("<Escape>", lambda e: self.root.destroy())
+        self.root.bind("<Escape>", self.on_cancel)
 
     def on_press(self, event):
         self.start_x = event.x_root
@@ -125,6 +150,10 @@ class ROISelectorOverlay:
 
     def on_release(self, event):
         end_x, end_y = event.x_root, event.y_root
+        try:
+            self.root.grab_release()
+        except Exception:
+            pass
         self.root.destroy()
         
         x1 = min(self.start_x, end_x)
@@ -135,6 +164,13 @@ class ROISelectorOverlay:
         if (x2 - x1) > 20 and (y2 - y1) > 10:
             self.callback(x1, y1, x2, y2)
 
+    def on_cancel(self, event):
+        try:
+            self.root.grab_release()
+        except Exception:
+            pass
+        self.root.destroy()
+
 
 class StageSequenceDialog:
     """Dialog window to manage stage reset sequence clicks & delays."""
@@ -144,15 +180,19 @@ class StageSequenceDialog:
         
         self.dialog = tk.Toplevel(parent)
         self.dialog.title("🔄 Stage Reset Sequence Manager")
-        self.dialog.geometry("450x380")
+        self.dialog.geometry("480x420")
         self.dialog.config(bg="#1e1e28")
         self.dialog.transient(parent)
-        self.dialog.grab_set()
+        
+        try:
+            self.dialog.grab_set()
+        except Exception:
+            pass
 
         self.steps = list(self.cfg_mgr.get().get("stage_reset_sequence", []))
 
         tk.Label(self.dialog, text="Stage Reset Click Sequence", font=("Segoe UI", 12, "bold"), bg="#1e1e28", fg="#00d2ff").pack(anchor="w", padx=15, pady=(15, 5))
-        tk.Label(self.dialog, text="These click steps execute automatically after minigame / inventory clean to repeat the stage.", font=("Segoe UI", 8), bg="#1e1e28", fg="#aaaaaa", wraplength=420, justify="left").pack(anchor="w", padx=15, pady=(0, 10))
+        tk.Label(self.dialog, text="These click steps execute automatically after minigame / inventory clean to repeat the stage.", font=("Segoe UI", 8), bg="#1e1e28", fg="#aaaaaa", wraplength=440, justify="left").pack(anchor="w", padx=15, pady=(0, 10))
 
         # Listbox frame
         list_frame = tk.Frame(self.dialog, bg="#1e1e28")
@@ -161,13 +201,22 @@ class StageSequenceDialog:
         self.listbox = tk.Listbox(list_frame, bg="#111118", fg="#00ff88", font=("Consolas", 10), selectbackground="#2a2a3c", highlightthickness=0, bd=1, relief="solid")
         self.listbox.pack(fill=tk.BOTH, expand=True, side=tk.LEFT)
 
+        # Control panel for delay & buttons
+        delay_frame = tk.Frame(self.dialog, bg="#1e1e28")
+        delay_frame.pack(fill=tk.X, padx=15, pady=(5, 0))
+        
+        tk.Label(delay_frame, text="Delay After Next Click (seconds):", font=("Segoe UI", 8, "bold"), bg="#1e1e28", fg="#ffffff").pack(side=tk.LEFT)
+        self.entry_delay = tk.Entry(delay_frame, font=("Segoe UI", 9, "bold"), width=6, bg="#111118", fg="#00ff88", insertbackground="white", bd=1, relief="solid")
+        self.entry_delay.insert(0, "1.0")
+        self.entry_delay.pack(side=tk.LEFT, padx=8)
+
         # Buttons frame
         btn_frame = tk.Frame(self.dialog, bg="#1e1e28")
         btn_frame.pack(fill=tk.X, padx=15, pady=15)
 
         tk.Button(btn_frame, text="➕ Add Click Step", font=("Segoe UI", 9, "bold"), bg="#009944", fg="#ffffff", activebackground="#00cc55", relief="flat", padx=10, pady=6, command=self.on_add_step).pack(side=tk.LEFT, padx=(0, 10))
         tk.Button(btn_frame, text="🗑️ Clear All", font=("Segoe UI", 9, "bold"), bg="#cc2222", fg="#ffffff", activebackground="#ff3333", relief="flat", padx=10, pady=6, command=self.on_clear_steps).pack(side=tk.LEFT)
-        tk.Button(btn_frame, text="Done", font=("Segoe UI", 9, "bold"), bg="#333344", fg="#ffffff", activebackground="#444455", relief="flat", padx=15, pady=6, command=self.dialog.destroy).pack(side=tk.RIGHT)
+        tk.Button(btn_frame, text="Done", font=("Segoe UI", 9, "bold"), bg="#333344", fg="#ffffff", activebackground="#444455", relief="flat", padx=15, pady=6, command=self.on_done).pack(side=tk.RIGHT)
 
         self._refresh_listbox()
 
@@ -177,13 +226,29 @@ class StageSequenceDialog:
             self.listbox.insert(tk.END, f"Step {idx+1}: Click ({step['x']}, {step['y']})  [Wait {step['delay']}s]")
 
     def on_add_step(self):
+        try:
+            self.dialog.grab_release()
+        except Exception:
+            pass
         self.dialog.iconify()
-        SpotSelectorOverlay(self._on_step_pos_selected)
+        prompt = f"🎯 Step {len(self.steps)+1}: LEFT-CLICK anywhere to set click location (Press ESC to cancel)"
+        SpotSelectorOverlay(self._on_step_pos_selected, prompt=prompt)
 
     def _on_step_pos_selected(self, x, y):
         self.dialog.deiconify()
-        # Default 1.0s delay per step
-        self.steps.append({"x": x, "y": y, "delay": 1.0})
+        self.dialog.lift()
+        self.dialog.focus_force()
+        try:
+            self.dialog.grab_set()
+        except Exception:
+            pass
+
+        try:
+            delay_val = float(self.entry_delay.get().strip())
+        except ValueError:
+            delay_val = 1.0
+
+        self.steps.append({"x": x, "y": y, "delay": delay_val})
         self.cfg_mgr.set("stage_reset_sequence", self.steps)
         self._refresh_listbox()
         self.on_update()
@@ -193,6 +258,13 @@ class StageSequenceDialog:
         self.cfg_mgr.set("stage_reset_sequence", self.steps)
         self._refresh_listbox()
         self.on_update()
+
+    def on_done(self):
+        try:
+            self.dialog.grab_release()
+        except Exception:
+            pass
+        self.dialog.destroy()
 
 
 class DashboardApp:
