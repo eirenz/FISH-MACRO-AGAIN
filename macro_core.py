@@ -189,15 +189,22 @@ class AutoFishingEngine:
                 time.sleep(0.005) # ~120-200 FPS tracking loop
 
             # ---------------------------------------------------------
-            # STATE: RECAST WAIT & INVENTORY CHECK (HALTS FISHING CYCLE)
+            # STATE: RECAST WAIT & INVENTORY CHECK (VERIFIES MINIGAME ENDED)
             # ---------------------------------------------------------
             elif self.state == MacroState.RECAST_WAIT:
                 self.mouse.force_release()
-                recast_delay = min(cfg.get("recast_delay", 0.4), 0.5)
-                time.sleep(recast_delay)
+                time.sleep(0.3)
 
+                # Strict Verification: Check that Minigame UI is 100% gone before touching inventory
+                if roi:
+                    verify_frame = self.tracker.grab_roi(roi)
+                    if self.tracker.is_ui_present(verify_frame):
+                        self.log("⚠️ Minigame UI still active! Resuming minigame tracking...")
+                        self.set_state(MacroState.PLAYING)
+                        continue
+
+                self.log("✅ Minigame verified finished. Halting fishing cycle for inventory processing...")
                 if hotbar_roi:
-                    self.log("📦 Halting fishing cycle: Starting Hotbar Key Pressing & Tome Deletion...")
                     self.set_state(MacroState.CLEANING_INVENTORY)
                 else:
                     self.log("Hotbar ROI not calibrated! Resuming fishing cycle...")
@@ -207,7 +214,15 @@ class AutoFishingEngine:
             # STATE: CLEANING INVENTORY (Press 1..6 Keys & Drag Tomes to Trash)
             # ---------------------------------------------------------
             elif self.state == MacroState.CLEANING_INVENTORY:
-                self.log("📦 Hotbar Processing: Pressing keys 1, 2, 3, 4, 5, 6...")
+                # HARD SAFETY GUARD: Double check that user is NOT currently in a minigame
+                if roi:
+                    check_frame = self.tracker.grab_roi(roi)
+                    if self.tracker.is_ui_present(check_frame):
+                        self.log("⛔ SAFETY GUARD: Active Minigame UI detected! Aborting inventory cleanup.")
+                        self.set_state(MacroState.PLAYING)
+                        continue
+
+                self.log("📦 Starting Hotbar Processing: Pressing keys 1, 2, 3, 4, 5, 6...")
                 
                 # 1. Press hotbar keys 1, 2, 3, 4, 5, 6 sequentially
                 for slot_num in range(1, 7):
@@ -221,6 +236,14 @@ class AutoFishingEngine:
 
                 # 2. Check remaining items for TOME and INSTANTLY DRAG Tomes to Trash Can button
                 if hotbar_roi and trash_pos:
+                    # Final safety check before dragging
+                    if roi:
+                        check_frame = self.tracker.grab_roi(roi)
+                        if self.tracker.is_ui_present(check_frame):
+                            self.log("⛔ SAFETY GUARD: Minigame started mid-cleanup! Aborting Tome drag.")
+                            self.set_state(MacroState.PLAYING)
+                            continue
+
                     hotbar_img = self.tracker.grab_roi(hotbar_roi)
                     occupied_slots, is_full, slot_crops = self.tracker.check_hotbar(hotbar_img)
                     
