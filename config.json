@@ -1,0 +1,23 @@
+{
+    "cast_pos": [
+        1267,
+        354
+    ],
+    "minigame_roi": [
+        501,
+        909,
+        1447,
+        1035
+    ],
+    "cast_delay": 1.5,
+    "recast_delay": 1.5,
+    "kp": 0.08,
+    "kd": 0.05,
+    "kv": 0.03,
+    "target_offset": 0,
+    "hotbar_roi": null,
+    "trash_pos": null,
+    "min_ui_confidence": 0.5,
+    "hotkey_start": "f5",
+    "hotkey_stop": "f8"
+}
