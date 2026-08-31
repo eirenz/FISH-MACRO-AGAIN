@@ -194,23 +194,31 @@ class VisionTracker:
 
     def is_tome_item(self, slot_crop):
         """
-        Detects if a slot item is a TOME (purple book with gold trim & red tag).
+        Detects if a slot item is a TOME (purple/magenta book cover or red tag).
+        Returns (is_tome: bool, purple_pixels: int, red_pixels: int)
         """
         if slot_crop is None or slot_crop.size == 0:
-            return False
+            return False, 0, 0
 
-        hsv = cv2.cvtColor(slot_crop, cv2.COLOR_BGR2HSV)
+        # Crop inner 80% to avoid slot border frame noise
+        h, w = slot_crop.shape[:2]
+        if h > 10 and w > 10:
+            inner_crop = slot_crop[int(h * 0.1):int(h * 0.9), int(w * 0.1):int(w * 0.9)]
+        else:
+            inner_crop = slot_crop
 
-        # 1. Purple Book Cover (HSV)
-        lower_purple = np.array([120, 50, 40])
-        upper_purple = np.array([165, 255, 255])
+        hsv = cv2.cvtColor(inner_crop, cv2.COLOR_BGR2HSV)
+
+        # 1. Purple / Violet / Magenta Book Cover (HSV)
+        lower_purple = np.array([110, 20, 20])
+        upper_purple = np.array([170, 255, 255])
         purple_mask = cv2.inRange(hsv, lower_purple, upper_purple)
         purple_pixels = cv2.countNonZero(purple_mask)
 
-        # 2. Red Ribbon / Tome Tag (HSV red wraps around 0 and 180)
-        lower_red1 = np.array([0, 100, 100])
-        upper_red1 = np.array([10, 255, 255])
-        lower_red2 = np.array([170, 100, 100])
+        # 2. Red Book Cover / Tag (HSV red wraps 0..15 and 160..180)
+        lower_red1 = np.array([0, 35, 35])
+        upper_red1 = np.array([15, 255, 255])
+        lower_red2 = np.array([160, 35, 35])
         upper_red2 = np.array([180, 255, 255])
         
         red_mask = cv2.bitwise_or(
@@ -219,9 +227,9 @@ class VisionTracker:
         )
         red_pixels = cv2.countNonZero(red_mask)
 
-        # A Tome has significant purple book area (>60 pixels) AND red ribbon badge pixels (>10 pixels)
-        is_tome = (purple_pixels > 60 and red_pixels > 10) or (purple_pixels > 120)
-        return is_tome
+        # A Tome item has purple or red book graphics
+        is_tome = (purple_pixels > 20) or (red_pixels > 20) or ((purple_pixels + red_pixels) > 30)
+        return is_tome, purple_pixels, red_pixels
 
     def read_timer_display(self, timer_crop):
         """

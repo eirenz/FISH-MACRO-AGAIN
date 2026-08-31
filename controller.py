@@ -65,34 +65,39 @@ class MouseController:
         _send_input(MOUSEEVENTF_LEFTUP)
         self.is_down = False
 
-    def drag_and_drop(self, from_pos, to_pos, duration=0.25):
+    def drag_and_drop(self, from_pos, to_pos, duration=0.35):
         """Smoothly drag from from_pos to to_pos by holding LMB."""
         fx, fy = int(from_pos[0]), int(from_pos[1])
         tx, ty = int(to_pos[0]), int(to_pos[1])
 
-        # Move to start position
+        # Move to item slot center
         ctypes.windll.user32.SetCursorPos(fx, fy)
-        time.sleep(0.05)
+        time.sleep(0.08)
         
-        # Hold left mouse down
+        # Press left mouse down
         _send_input(MOUSEEVENTF_LEFTDOWN)
         self.is_down = True
-        time.sleep(0.05)
 
-        # Smooth movement interpolation
-        steps = 15
-        step_delay = max(duration / steps, 0.005)
+        # CRITICAL: Hold in place for 0.12s so UI registers item drag pickup
+        time.sleep(0.12)
+
+        # Smooth movement interpolation to target position
+        steps = 25
+        step_delay = max(duration / steps, 0.008)
         for i in range(1, steps + 1):
             cx = int(fx + (tx - fx) * (i / steps))
             cy = int(fy + (ty - fy) * (i / steps))
             ctypes.windll.user32.SetCursorPos(cx, cy)
             time.sleep(step_delay)
 
-        time.sleep(0.05)
+        # Hold over trash target for 0.1s before releasing
+        time.sleep(0.10)
+
+        # Release left mouse button twice
         _send_input(MOUSEEVENTF_LEFTUP)
         _send_input(MOUSEEVENTF_LEFTUP)
         self.is_down = False
-        time.sleep(0.05)
+        time.sleep(0.08)
 
     def press_number_key(self, num_str):
         """Presses keyboard number key '1', '2', '3', '4', '5', or '6'."""

@@ -239,13 +239,14 @@ class AutoFishingEngine:
                             break
 
                         slot_crop = slot_crops[i]
-                        if self.tracker.is_tome_item(slot_crop):
+                        is_tome, p_pix, r_pix = self.tracker.is_tome_item(slot_crop)
+                        if is_tome:
                             slot_x_center = hx1 + (i + 0.5) * slot_w
-                            self.log(f"📜 TOME detected in Slot {i+1}! Dragging item to Trash Can button...")
+                            self.log(f"📜 TOME detected in Slot {i+1} (Purple: {p_pix}, Red: {r_pix})! Dragging to Trash Can button...")
                             self.mouse.drag_and_drop((slot_x_center, slot_y_center), trash_pos)
                             time.sleep(0.3)
                         else:
-                            self.log(f"Slot {i+1}: Non-Tome item (Kept in hotbar).")
+                            self.log(f"Slot {i+1}: Non-Tome item (Purple: {p_pix}, Red: {r_pix}). Kept in hotbar.")
                 elif not trash_pos:
                     self.log("⚠️ Trash Can button not calibrated! Skipping Tome deletion.")
 
