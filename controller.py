@@ -109,28 +109,47 @@ class PIDController:
         self.prev_error = 0.0
         self.prev_time = time.time()
         self.filtered_derivative = 0.0
+        self.pulse_counter = 0
 
     def update(self, fish_x, bar_x, fish_vel=0.0):
         """
         Returns True if mouse should be PRESSED, False if RELEASED.
+        Uses deadband feathering to hover smoothly over the fish without endless LMB holding.
         """
         now = time.time()
         dt = max(now - self.prev_time, 0.001)
         self.prev_time = now
 
-        # Error: positive means fish is to the RIGHT of bar (need to move right -> hold LMB)
+        # Target and Error calculation
         target_x = fish_x + self.target_offset
         error = target_x - bar_x
 
-        # Derivative: rate of error change (damping momentum)
+        # Rate of error change (derivative)
         raw_derivative = (error - self.prev_error) / dt
-        # Low-pass filter on derivative to prevent jitter
-        self.filtered_derivative = 0.7 * self.filtered_derivative + 0.3 * raw_derivative
+        self.filtered_derivative = 0.6 * self.filtered_derivative + 0.4 * raw_derivative
         self.prev_error = error
 
-        # Control output signal u with velocity feedforward
-        u = (self.kp * error) + (self.kd * self.filtered_derivative) + (self.kv * fish_vel)
+        self.pulse_counter = (self.pulse_counter + 1) % 6
 
-        # Decision threshold: positive output means apply upward force (hold LMB)
-        should_press = u > 0
+        # Deadband feathering logic:
+        if error > 18:
+            # Fish is significantly to the right -> hold LMB to accelerate right
+            should_press = True
+        elif error < -14:
+            # Fish is to the left -> release LMB completely to drop left
+            should_press = False
+        else:
+            # Bar is ON TOP of the fish (-14 <= error <= 18): Feather/Pulse LMB
+            if self.filtered_derivative < -5:
+                # Bar is falling away from fish -> pulse to catch
+                should_press = True
+            elif self.filtered_derivative > 10:
+                # Bar moving right fast -> release to prevent overshoot
+                should_press = False
+            else:
+                # Hover pulse (press 1 frame out of 3 to counteract gravity)
+                should_press = (self.pulse_counter == 0)
+
+        # Output signal u for debug logging
+        u = (self.kp * error) + (self.kd * self.filtered_derivative) + (self.kv * fish_vel)
         return should_press, error, u

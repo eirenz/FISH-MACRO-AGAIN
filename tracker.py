@@ -95,8 +95,8 @@ class VisionTracker:
         # -------------------------------------------------------------
         # 2. Track White Fish Icon (Scoped to Slider Track Y-bounds)
         # -------------------------------------------------------------
-        lower_white = np.array([0, 0, 180])
-        upper_white = np.array([180, 80, 255])
+        lower_white = np.array([0, 0, 185])
+        upper_white = np.array([180, 75, 255])
         white_mask = cv2.inRange(hsv, lower_white, upper_white)
 
         contours_white, _ = cv2.findContours(white_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
@@ -105,27 +105,31 @@ class VisionTracker:
         valid_fish_contours = []
         
         # Determine track Y-bounds if blue bar was detected
-        track_y1 = (by - 10) if bar_x is not None else 0
-        track_y2 = (by + bh + 10) if bar_x is not None else debug_frame.shape[0]
+        track_y1 = (by - 8) if bar_x is not None else 0
+        track_y2 = (by + bh + 8) if bar_x is not None else debug_frame.shape[0]
 
         for c in contours_white:
             area = cv2.contourArea(c)
-            # Fish icon is small to medium sized contour
-            if 15 < area < 800:
+            # Fish icon is small to medium compact contour (typically 20 to 350 sq pixels)
+            if 20 < area < 400:
                 fx, fy, fw, fh = cv2.boundingRect(c)
-                # Ensure contour is within the slider track Y-bounds (ignores top progress bar)
+                # Ensure contour is within the slider track Y-bounds
                 if track_y1 <= fy <= track_y2:
                     aspect_ratio = fw / float(fh)
-                    if 0.5 <= aspect_ratio <= 3.5:
-                        valid_fish_contours.append((c, fx, fy, fw, fh, area))
+                    # Ignore long thin outlines or contours as wide as the blue bar itself
+                    if 0.5 <= aspect_ratio <= 2.8 and (bar_w is None or fw < 0.65 * bar_w):
+                        # Distance to track vertical center line
+                        track_center_y = by + bh / 2.0 if bar_x is not None else debug_frame.shape[0] / 2.0
+                        dist_y = abs((fy + fh / 2.0) - track_center_y)
+                        valid_fish_contours.append((c, fx, fy, fw, fh, area, dist_y))
 
         now = time.time()
         dt = max(now - self.prev_fish_time, 0.001)
 
         if valid_fish_contours:
-            # Select best contour representing the fish icon
-            best_fish = max(valid_fish_contours, key=lambda item: item[5])
-            _, fx, fy, fw, fh, _ = best_fish
+            # Pick contour closest to the slider vertical center line, with reasonable area
+            best_fish = min(valid_fish_contours, key=lambda item: (item[6], abs(item[5] - 120)))
+            _, fx, fy, fw, fh, _, _ = best_fish
             fish_x = fx + fw / 2.0
             
             # Compute velocity
