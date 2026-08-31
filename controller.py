@@ -26,6 +26,12 @@ class KEYBDINPUT(ctypes.Structure):
 class INPUT_UNION(ctypes.Union):
     _fields_ = [("mi", MOUSEINPUT), ("ki", KEYBDINPUT)]
 
+class INPUT(ctypes.Structure):
+    _fields_ = [
+        ("type", ctypes.c_ulong),
+        ("u", INPUT_UNION)
+    ]
+
 INPUT_MOUSE = 0
 INPUT_KEYBOARD = 1
 MOUSEEVENTF_LEFTDOWN = 0x0002
